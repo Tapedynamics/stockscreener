@@ -1005,7 +1005,9 @@
                 console.log('Screener response:', data);
 
                 if (data.success) {
-                    displayResults(data.data, data.performance);
+                    // New API structure: data.data contains {basket, snapshot_id, performance}
+                    const result = data.data;
+                    displayResults(result.basket || result.data, result.performance);
                     await loadActivityLog();
                     await loadPortfolioStats();
                     console.log('Screener completed successfully');
@@ -1485,8 +1487,10 @@
                 console.log('Chart data received:', data);
 
                 if (data.success && data.data) {
-                    renderChart(data.data);
-                    updateChartStats(data.data);
+                    const result = data.data;
+                    const chartData = result.chart_data || result.data || result;
+                    renderChart(chartData);
+                    updateChartStats(chartData);
                 } else {
                     console.error('Error loading chart:', data.error || 'No data');
                 }

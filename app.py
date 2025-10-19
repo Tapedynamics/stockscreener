@@ -307,7 +307,7 @@ def run_screener():
         logger.info(f"Screener completed successfully - {basket['total_found']} stocks found")
 
         return api_success({
-            'data': basket,
+            'basket': basket,
             'snapshot_id': snapshot_id,
             'performance': stock_performance
         })
@@ -324,16 +324,11 @@ def get_activity_log():
         db = get_db()
         logs = db.get_activity_log(limit=20)
 
-        return jsonify({
-            'success': True,
-            'data': logs
-        })
+        return api_success(logs)
 
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        logger.error(f"Error in get_activity_log: {e}")
+        return api_error(str(e), 500)
 
 
 @app.route('/api/portfolio/history', methods=['GET'])
@@ -343,16 +338,11 @@ def get_portfolio_history():
         db = get_db()
         history = db.get_portfolio_history(limit=10)
 
-        return jsonify({
-            'success': True,
-            'data': history
-        })
+        return api_success(history)
 
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        logger.error(f"Error in get_portfolio_history: {e}")
+        return api_error(str(e), 500)
 
 
 @app.route('/api/portfolio/latest', methods=['GET'])
@@ -363,21 +353,13 @@ def get_latest_portfolio():
         portfolio = db.get_latest_portfolio()
 
         if portfolio:
-            return jsonify({
-                'success': True,
-                'data': portfolio
-            })
+            return api_success(portfolio)
         else:
-            return jsonify({
-                'success': False,
-                'error': 'No portfolio found'
-            }), 404
+            return api_error('No portfolio found', 404)
 
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        logger.error(f"Error in get_latest_portfolio: {e}")
+        return api_error(str(e), 500)
 
 
 @app.route('/api/scheduler/status', methods=['GET'])
@@ -388,21 +370,13 @@ def get_scheduler_status():
 
         if portfolio_scheduler:
             status = portfolio_scheduler.get_status()
-            return jsonify({
-                'success': True,
-                'data': status
-            })
+            return api_success(status)
         else:
-            return jsonify({
-                'success': False,
-                'error': 'Scheduler not initialized'
-            }), 500
+            return api_error('Scheduler not initialized', 500)
 
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        logger.error(f"Error in get_scheduler_status: {e}")
+        return api_error(str(e), 500)
 
 
 @app.route('/api/portfolio/performance', methods=['GET'])
@@ -416,10 +390,7 @@ def get_portfolio_performance():
         portfolio = db.get_latest_portfolio()
 
         if not portfolio:
-            return jsonify({
-                'success': False,
-                'error': 'No portfolio found'
-            }), 404
+            return api_error('No portfolio found', 404)
 
         # Calculate stats with real prices
         stats = tracker.get_portfolio_stats({
@@ -428,16 +399,11 @@ def get_portfolio_performance():
             'buffer': portfolio['buffer']
         })
 
-        return jsonify({
-            'success': True,
-            'data': stats
-        })
+        return api_success(stats)
 
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        logger.error(f"Error in get_portfolio_performance: {e}")
+        return api_error(str(e), 500)
 
 
 @app.route('/api/settings', methods=['GET'])
@@ -465,16 +431,11 @@ def get_settings():
             value = db.get_setting(key, default_settings[key])
             settings[key] = value
 
-        return jsonify({
-            'success': True,
-            'data': settings
-        })
+        return api_success(settings)
 
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        logger.error(f"Error in get_settings: {e}")
+        return api_error(str(e), 500)
 
 
 @app.route('/api/settings', methods=['POST'])
@@ -527,10 +488,7 @@ def get_portfolio_chart():
         portfolio = db.get_latest_portfolio()
 
         if not portfolio:
-            return jsonify({
-                'success': False,
-                'error': 'No portfolio found'
-            }), 404
+            return api_error('No portfolio found', 404)
 
         # Get initial value from settings
         initial_value = float(db.get_setting('initial_value', '150000'))
@@ -545,17 +503,14 @@ def get_portfolio_chart():
             'buffer': portfolio['buffer']
         }, timeframe)
 
-        return jsonify({
-            'success': True,
-            'data': chart_data,
+        return api_success({
+            'chart_data': chart_data,
             'timeframe': timeframe
         })
 
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        logger.error(f"Error in get_portfolio_chart: {e}")
+        return api_error(str(e), 500)
 
 
 def init_scheduler():
