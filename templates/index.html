@@ -1336,9 +1336,14 @@
                 const response = await fetch('/api/portfolio/history');
                 const data = await response.json();
 
-                if (data.success && data.data.length > 0) {
+                console.log('History API response:', data);
+                console.log('History data array:', data.data);
+
+                if (data.success && data.data && data.data.length > 0) {
+                    console.log(`Displaying ${data.data.length} history entries`);
                     displayHistory(data.data);
                 } else {
+                    console.warn('No history data found');
                     document.getElementById('historyList').innerHTML = `
                         <div class="log-entry">
                             <div class="log-content">
@@ -1353,10 +1358,19 @@
         }
 
         function displayHistory(history) {
+            console.log('displayHistory called with:', history);
             const historyList = document.getElementById('historyList');
+
+            if (!historyList) {
+                console.error('historyList element not found!');
+                return;
+            }
+
             historyList.innerHTML = '';
 
             history.forEach((snapshot, index) => {
+                console.log(`Processing snapshot ${index}:`, snapshot);
+
                 const date = new Date(snapshot.timestamp);
                 const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
                 const isLatest = index === 0;
@@ -1365,7 +1379,7 @@
                     <div class="log-entry">
                         <div class="log-time">${dateStr}</div>
                         <div class="log-content">
-                            <div class="log-action">${isLatest ? '🟢 Current Portfolio' : '📸 Snapshot #' + snapshot.id}</div>
+                            <div class="log-action">${isLatest ? 'CURRENT PORTFOLIO' : 'Snapshot #' + snapshot.id}</div>
                             <div class="log-description">
                                 <strong>Top 3:</strong> ${snapshot.take_profit.join(', ')}<br>
                                 <strong>Hold:</strong> ${snapshot.hold.join(', ')}<br>
@@ -1376,6 +1390,8 @@
                     </div>
                 `;
             });
+
+            console.log(`Displayed ${history.length} history entries`);
         }
 
         // ========================================
