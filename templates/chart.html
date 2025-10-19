@@ -308,11 +308,16 @@
                     // Update snapshots badge
                     document.getElementById('snapshots-count').textContent = `${snapshotsCount} snapshots`;
 
-                    // Render chart
-                    renderChart(chartData);
+                    // Check if we have data
+                    if (snapshotsCount === 0 || !chartData.labels || chartData.labels.length === 0) {
+                        showError('No historical data available yet. Run the screener to generate your first snapshot.');
+                    } else {
+                        // Render chart
+                        renderChart(chartData);
 
-                    // Update stats
-                    updateStats(chartData, snapshotsCount);
+                        // Update stats
+                        updateStats(chartData, snapshotsCount);
+                    }
                 } else {
                     showError('No chart data available');
                 }

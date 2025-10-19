@@ -372,11 +372,16 @@ def get_portfolio_history():
         db = get_db()
         history = db.get_portfolio_history(limit=10)
 
+        # Return empty array if no history
+        if history is None:
+            history = []
+
         return api_success(history)
 
     except Exception as e:
-        logger.error(f"Error in get_portfolio_history: {e}")
-        return api_error(str(e), 500)
+        logger.error(f"Error in get_portfolio_history: {e}", exc_info=True)
+        # Return empty array on error to prevent frontend crash
+        return api_success([])
 
 
 @app.route('/api/portfolio/latest', methods=['GET'])
@@ -522,7 +527,15 @@ def get_portfolio_chart():
         history = db.get_portfolio_history(limit=100)
 
         if not history or len(history) == 0:
-            return api_error('No portfolio history found', 404)
+            # Return empty chart data instead of error
+            return api_success({
+                'chart_data': {
+                    'labels': [],
+                    'datasets': []
+                },
+                'timeframe': timeframe,
+                'snapshots_count': 0
+            })
 
         logger.info(f"Building chart with {len(history)} historical snapshots")
 
