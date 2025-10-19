@@ -276,9 +276,9 @@ def run_screener():
         # Get previous portfolio
         previous_portfolio = db.get_latest_portfolio()
 
-        # Check if we should create a new snapshot or reuse existing one
-        # Only create new snapshot if previous one is from a different day
-        from datetime import datetime
+        # Check if we should create a new snapshot
+        # Only create if previous snapshot is older than 6 hours (to avoid chart noise)
+        from datetime import datetime, timedelta
         should_create_new_snapshot = True
         new_portfolio_value = None
 
@@ -291,34 +291,36 @@ def run_screener():
                 prev_dt = datetime.strptime(prev_time, '%Y-%m-%d %H:%M:%S')
 
             now = datetime.now()
+            hours_since_last = (now - prev_dt).total_seconds() / 3600
 
-            # If snapshot is from today, don't create new one - reuse portfolio_value
-            if prev_dt.date() == now.date():
+            # If last snapshot was less than 6 hours ago, skip creating new one
+            if hours_since_last < 6:
                 should_create_new_snapshot = False
                 new_portfolio_value = previous_portfolio.get('portfolio_value')
-                logger.info(f"Reusing today's snapshot - Portfolio value: ${new_portfolio_value:,.2f}")
+                logger.info(f"Recent snapshot exists ({hours_since_last:.1f}h ago) - Skipping new snapshot - Value: ${new_portfolio_value:,.2f}")
             else:
-                # Different day - calculate new value with simulated return
+                # More than 6 hours - calculate new value with simulated return
                 if previous_portfolio.get('portfolio_value'):
                     previous_value = previous_portfolio['portfolio_value']
-                    # Simulate weekly return (similar to historical simulation)
+                    # Simulate return (will be replaced with real prices)
                     import random
-                    weekly_return = random.uniform(-0.05, 0.08)  # -5% to +8%
-                    # Apply bull market bias (65% probability of positive return)
+                    daily_return = random.uniform(-0.02, 0.03)  # -2% to +3% per period
+                    # Apply bull market bias
                     if random.random() < 0.65:
-                        weekly_return = abs(weekly_return)
-                    new_portfolio_value = previous_value * (1 + weekly_return)
-                    logger.info(f"New day - Simulated return: {weekly_return*100:.2f}% - New value: ${new_portfolio_value:,.2f}")
+                        daily_return = abs(daily_return)
+                    new_portfolio_value = previous_value * (1 + daily_return)
+                    logger.info(f"Creating new snapshot - Simulated return: {daily_return*100:.2f}% - New value: ${new_portfolio_value:,.2f}")
                 else:
                     initial_value = float(db.get_setting('initial_value', '150000'))
                     new_portfolio_value = initial_value
+                    logger.info(f"Creating new snapshot - Initial value: ${new_portfolio_value:,.2f}")
         else:
             # First run - use initial setting
             initial_value = float(db.get_setting('initial_value', '150000'))
             new_portfolio_value = initial_value
             logger.info(f"First portfolio snapshot - Initial value: ${new_portfolio_value:,.2f}")
 
-        # Only save new snapshot if it's a different day
+        # Save new snapshot only if enough time has passed
         if should_create_new_snapshot:
             snapshot_id = db.save_portfolio_snapshot(
                 basket['take_profit'],
@@ -327,10 +329,11 @@ def run_screener():
                 notes='Manual screener run',
                 portfolio_value=new_portfolio_value
             )
+            logger.info(f"New snapshot saved with ID: {snapshot_id}")
         else:
-            # Reuse existing snapshot ID
+            # Skip snapshot creation - just update activity log
             snapshot_id = previous_portfolio['id']
-            logger.info(f"Reusing snapshot ID: {snapshot_id}")
+            logger.info(f"Skipping snapshot - Recent one exists (ID: {snapshot_id})")
 
         # Compare portfolios and log changes
         if previous_portfolio:
