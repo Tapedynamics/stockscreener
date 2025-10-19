@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python stock_screener.py)",
+      "Bash(python debug_html.py)",
+      "Bash(pip install flask)",
+      "Bash(python -m pip install flask)",
+      "Bash(python app.py)",
+      "Bash(git init)",
+      "Bash(git remote add origin https://github.com/Tapedynamics/stockscreener.git)",
+      "Bash(git add .)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

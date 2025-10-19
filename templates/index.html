@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Screener - Finviz</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 40px;
+            font-size: 1.1em;
+        }
+
+        .button-container {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        #runScreener {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 18px 50px;
+            font-size: 1.2em;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        #runScreener:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        #runScreener:active {
+            transform: translateY(0);
+        }
+
+        #runScreener:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            text-align: center;
+            color: #667eea;
+            font-size: 1.2em;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .results {
+            display: none;
+        }
+
+        .basket-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border-radius: 10px;
+            background: #f8f9fa;
+        }
+
+        .basket-section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            margin-left: 10px;
+            font-weight: normal;
+        }
+
+        .badge.take-profit {
+            background: #28a745;
+            color: white;
+        }
+
+        .badge.hold {
+            background: #ffc107;
+            color: #333;
+        }
+
+        .badge.buffer {
+            background: #6c757d;
+            color: white;
+        }
+
+        .ticker-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .ticker {
+            background: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            color: #333;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s ease;
+        }
+
+        .ticker:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .info {
+            text-align: center;
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Stock Screener</h1>
+        <p class="subtitle">Finviz - Large Cap Value Stocks</p>
+
+        <div class="button-container">
+            <button id="runScreener" onclick="runScreener()">
+                Esegui Screener
+            </button>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Caricamento dati da Finviz...</p>
+        </div>
+
+        <div class="error" id="error"></div>
+
+        <div class="results" id="results">
+            <!-- TOP 3 -->
+            <div class="basket-section">
+                <h2>
+                    Top 3 - Take Profit
+                    <span class="badge take-profit">Posizioni 1-3</span>
+                </h2>
+                <div class="ticker-list" id="takeProfitList"></div>
+            </div>
+
+            <!-- 10 HOLD -->
+            <div class="basket-section">
+                <h2>
+                    10 Hold - Basket
+                    <span class="badge hold">Posizioni 4-13</span>
+                </h2>
+                <div class="ticker-list" id="holdList"></div>
+            </div>
+
+            <!-- 2 BUFFER -->
+            <div class="basket-section">
+                <h2>
+                    2 Buffer
+                    <span class="badge buffer">Posizioni 14-15</span>
+                </h2>
+                <div class="ticker-list" id="bufferList"></div>
+            </div>
+
+            <div class="info" id="info"></div>
+        </div>
+    </div>
+
+    <script>
+        async function runScreener() {
+            const button = document.getElementById('runScreener');
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            const error = document.getElementById('error');
+
+            // Reset
+            button.disabled = true;
+            loading.style.display = 'block';
+            results.style.display = 'none';
+            error.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/screener');
+                const data = await response.json();
+
+                if (data.success) {
+                    // Popola i risultati
+                    displayResults(data.data);
+                } else {
+                    showError(data.error || 'Errore sconosciuto');
+                }
+            } catch (err) {
+                showError('Errore di connessione: ' + err.message);
+            } finally {
+                button.disabled = false;
+                loading.style.display = 'none';
+            }
+        }
+
+        function displayResults(basket) {
+            const results = document.getElementById('results');
+            const takeProfitList = document.getElementById('takeProfitList');
+            const holdList = document.getElementById('holdList');
+            const bufferList = document.getElementById('bufferList');
+            const info = document.getElementById('info');
+
+            // Clear previous results
+            takeProfitList.innerHTML = '';
+            holdList.innerHTML = '';
+            bufferList.innerHTML = '';
+
+            // Take Profit
+            basket.take_profit.forEach(ticker => {
+                takeProfitList.innerHTML += `<div class="ticker">${ticker}</div>`;
+            });
+
+            // Hold
+            basket.hold.forEach(ticker => {
+                holdList.innerHTML += `<div class="ticker">${ticker}</div>`;
+            });
+
+            // Buffer
+            basket.buffer.forEach(ticker => {
+                bufferList.innerHTML += `<div class="ticker">${ticker}</div>`;
+            });
+
+            // Info
+            info.textContent = `Totale ticker trovati: ${basket.total_found}`;
+
+            results.style.display = 'block';
+        }
+
+        function showError(message) {
+            const error = document.getElementById('error');
+            error.textContent = 'Errore: ' + message;
+            error.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
