@@ -276,12 +276,35 @@ def run_screener():
         # Get previous portfolio
         previous_portfolio = db.get_latest_portfolio()
 
-        # Save new portfolio snapshot
+        # Calculate new portfolio value based on previous value
+        # If there's a previous portfolio with value, calculate new value
+        # Otherwise start with initial value
+        new_portfolio_value = None
+        if previous_portfolio and previous_portfolio.get('portfolio_value'):
+            # Use previous value as base
+            previous_value = previous_portfolio['portfolio_value']
+            # Simulate weekly return (similar to historical simulation)
+            # This will be replaced with real price tracking in the future
+            import random
+            weekly_return = random.uniform(-0.05, 0.08)  # -5% to +8%
+            # Apply bull market bias (65% probability of positive return)
+            if random.random() < 0.65:
+                weekly_return = abs(weekly_return)
+            new_portfolio_value = previous_value * (1 + weekly_return)
+            logger.info(f"Simulated weekly return: {weekly_return*100:.2f}% - New value: ${new_portfolio_value:,.2f}")
+        else:
+            # First run or no historical value - use initial setting
+            initial_value = float(db.get_setting('initial_value', '150000'))
+            new_portfolio_value = initial_value
+            logger.info(f"First portfolio snapshot - Initial value: ${new_portfolio_value:,.2f}")
+
+        # Save new portfolio snapshot with calculated value
         snapshot_id = db.save_portfolio_snapshot(
             basket['take_profit'],
             basket['hold'],
             basket['buffer'],
-            notes='Manual screener run'
+            notes='Manual screener run',
+            portfolio_value=new_portfolio_value
         )
 
         # Compare portfolios and log changes
