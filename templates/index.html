@@ -711,7 +711,7 @@
         <div class="tabs-container">
             <button class="tab-button active" onclick="switchTab(event, 'portfolio')">📊 Portfolio</button>
             <button class="tab-button" onclick="switchTab(event, 'history')">📜 History</button>
-            <button class="tab-button" onclick="switchTab(event, 'charts')">📈 Charts</button>
+            <a href="/chart" class="tab-button" style="text-decoration: none; display: inline-block;">📈 Charts</a>
             <button class="tab-button" onclick="switchTab(event, 'compare')">⚖️ Compare</button>
             <button class="tab-button" onclick="switchTab(event, 'benchmark')">📊 Benchmark</button>
             <button class="tab-button" onclick="switchTab(event, 'settings')">⚙️ Settings</button>
@@ -805,49 +805,6 @@
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Tab Content: Charts -->
-        <div id="tab-charts" class="tab-content">
-            <div class="chart-container">
-                <div class="chart-header">
-                    <div class="chart-title">📈 Portfolio Performance (Simulated from Jan 1, 2025)</div>
-                    <div class="timeframe-selector">
-                        <button class="timeframe-btn" onclick="changeTimeframe('1M')">1M</button>
-                        <button class="timeframe-btn" onclick="changeTimeframe('3M')">3M</button>
-                        <button class="timeframe-btn" onclick="changeTimeframe('6M')">6M</button>
-                        <button class="timeframe-btn active" onclick="changeTimeframe('YTD')">YTD</button>
-                        <button class="timeframe-btn" onclick="changeTimeframe('ALL')">ALL</button>
-                    </div>
-                </div>
-
-                <div class="chart-canvas">
-                    <canvas id="portfolioChart"></canvas>
-                </div>
-
-                <div class="chart-stats">
-                    <div class="chart-stat">
-                        <div class="chart-stat-label">Initial Value</div>
-                        <div class="chart-stat-value" id="chart-initial-value">$150,000</div>
-                    </div>
-                    <div class="chart-stat">
-                        <div class="chart-stat-label">Current Value</div>
-                        <div class="chart-stat-value" id="chart-current-value">$150,000</div>
-                    </div>
-                    <div class="chart-stat">
-                        <div class="chart-stat-label">Total Return</div>
-                        <div class="chart-stat-value" id="chart-total-return" style="color: #10b981;">+0.00%</div>
-                    </div>
-                    <div class="chart-stat">
-                        <div class="chart-stat-label">Days Tracked</div>
-                        <div class="chart-stat-value" id="chart-days-tracked">0</div>
-                    </div>
-                </div>
-            </div>
-
-            <div style="padding: 20px; background: rgba(102, 126, 234, 0.1); border-radius: 10px; border: 1px solid rgba(102, 126, 234, 0.3); color: #667eea;">
-                <strong>ℹ️ Simulation Note:</strong> This chart simulates how your current portfolio would have performed if you had started with it on January 1, 2025. It uses real historical price data from Yahoo Finance to calculate daily portfolio values based on equal-weight distribution.
             </div>
         </div>
 

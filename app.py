@@ -222,6 +222,12 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/chart')
+def chart():
+    """Pagina dedicata ai grafici"""
+    return render_template('chart.html')
+
+
 @app.route('/api/screener', methods=['GET'])
 def run_screener():
     """API endpoint per eseguire lo screener"""
