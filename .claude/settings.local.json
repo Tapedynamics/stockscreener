@@ -1,13 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -m py_compile app.py)",
-      "Bash(python -m py_compile database.py)",
-      "Bash(python -m py_compile utils.py)",
-      "Bash(python -m py_compile constants.py)",
-      "Bash(python -m py_compile stock_screener.py)",
-      "Bash(python -m py_compile price_tracker.py)",
-      "Bash(git add .)"
+      "Bash(python -c \"from database import get_db; db = get_db(); h = db.get_portfolio_history(limit=5); print(''Latest 5 snapshots:''); [print(f\"\"  {s[''timestamp'']}: portfolio_value = {s.get(''portfolio_value'', ''MISSING'')}\"\") for s in h]\")"
     ],
     "deny": [],
     "ask": []

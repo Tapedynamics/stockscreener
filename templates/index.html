@@ -1017,10 +1017,25 @@
         }
 
         function updateStatsDisplay(stats) {
-            // Update portfolio value
+            console.log('Updating stats display:', stats);
+
+            // Update portfolio value and all-time return
             const valueElem = document.querySelector('.stat-card:nth-child(1) .stat-value');
+            const allTimeElem = document.querySelector('.stat-card:nth-child(1) .stat-change');
             if (valueElem) {
-                valueElem.textContent = `$${stats.total_value.toLocaleString()}`;
+                valueElem.textContent = `$${Math.round(stats.total_value).toLocaleString()}`;
+            }
+            if (allTimeElem && stats.all_time_return !== undefined) {
+                const returnClass = stats.all_time_return > 0 ? 'positive' : stats.all_time_return < 0 ? 'negative' : 'neutral';
+                const returnSign = stats.all_time_return > 0 ? '+' : '';
+                allTimeElem.textContent = `${returnSign}${stats.all_time_return.toFixed(2)}% All Time`;
+                allTimeElem.className = `stat-change ${returnClass}`;
+            }
+
+            // Update total positions
+            const positionsElem = document.getElementById('totalPositions');
+            if (positionsElem) {
+                positionsElem.textContent = stats.total_positions || 0;
             }
 
             // Update weekly performance
