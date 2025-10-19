@@ -490,12 +490,41 @@ def get_portfolio_performance():
         all_time_gain = current_value - initial_value
         all_time_return = ((current_value - initial_value) / initial_value * 100) if initial_value > 0 else 0
 
-        # Calculate weekly return (compare last 2 snapshots if available)
+        # Calculate weekly return (find snapshot from ~7 days ago)
         weekly_gain = 0
         weekly_performance = 0
         if len(history_sorted) >= 2:
-            previous_snapshot = history_sorted[-2]
-            previous_value = previous_snapshot.get('portfolio_value') or current_value
+            from datetime import datetime, timedelta
+
+            # Parse latest timestamp
+            latest_time = latest_snapshot['timestamp']
+            if 'T' in latest_time:
+                latest_dt = datetime.fromisoformat(latest_time.replace('Z', '+00:00'))
+            else:
+                latest_dt = datetime.strptime(latest_time, '%Y-%m-%d %H:%M:%S')
+
+            # Find snapshot from ~7 days ago
+            week_ago = latest_dt - timedelta(days=7)
+            week_ago_snapshot = None
+
+            # Search for closest snapshot to 7 days ago
+            for snapshot in reversed(history_sorted[:-1]):  # Exclude latest
+                snap_time = snapshot['timestamp']
+                if 'T' in snap_time:
+                    snap_dt = datetime.fromisoformat(snap_time.replace('Z', '+00:00'))
+                else:
+                    snap_dt = datetime.strptime(snap_time, '%Y-%m-%d %H:%M:%S')
+
+                # If this snapshot is older than or equal to 7 days ago, use it
+                if snap_dt <= week_ago:
+                    week_ago_snapshot = snapshot
+                    break
+
+            # If no snapshot from 7 days ago, use first snapshot
+            if not week_ago_snapshot:
+                week_ago_snapshot = history_sorted[0]
+
+            previous_value = week_ago_snapshot.get('portfolio_value') or current_value
             weekly_gain = current_value - previous_value
             weekly_performance = ((current_value - previous_value) / previous_value * 100) if previous_value > 0 else 0
 
