@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio History - AI Stock Screener</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1a1f3a 0%, #2d1b4e 100%);
+            color: #e4e8f0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .back-btn {
+            background: rgba(102, 126, 234, 0.2);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            color: #667eea;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .back-btn:hover {
+            background: rgba(102, 126, 234, 0.3);
+            transform: translateX(-3px);
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #8b92a7;
+            margin-top: 5px;
+        }
+
+        .activity-log {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .log-title {
+            font-size: 22px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .stat-change {
+            padding: 6px 15px;
+            border-radius: 20px;
+            font-size: 13px;
+        }
+
+        .stat-change.neutral {
+            background: rgba(102, 126, 234, 0.2);
+            color: #667eea;
+        }
+
+        .log-entries {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .log-entry {
+            background: rgba(255, 255, 255, 0.03);
+            border-left: 3px solid #667eea;
+            padding: 20px;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .log-entry:hover {
+            background: rgba(255, 255, 255, 0.06);
+            transform: translateX(5px);
+        }
+
+        .log-time {
+            font-size: 12px;
+            color: #8b92a7;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .log-content {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .log-action {
+            font-weight: 600;
+            font-size: 15px;
+            color: #fff;
+        }
+
+        .log-action.buy {
+            color: #10b981;
+        }
+
+        .log-action.sell {
+            color: #ef4444;
+        }
+
+        .log-action.hold {
+            color: #667eea;
+        }
+
+        .log-action.rebalance {
+            color: #f59e0b;
+        }
+
+        .log-description {
+            font-size: 14px;
+            color: #b4b9c7;
+            line-height: 1.6;
+        }
+
+        .log-stocks {
+            margin-top: 12px;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+            font-size: 13px;
+            color: #e0e0e0;
+        }
+
+        .stock-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .stock-tag {
+            background: rgba(102, 126, 234, 0.2);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-weight: 500;
+            font-size: 12px;
+        }
+
+        .stock-tag.added {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+
+        .stock-tag.removed {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #8b92a7;
+        }
+
+        .loading i {
+            font-size: 32px;
+            margin-bottom: 15px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: #8b92a7;
+        }
+
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            font-size: 20px;
+            margin-bottom: 10px;
+            color: #b4b9c7;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-left">
+                <a href="/" class="back-btn">
+                    <i class="fas fa-arrow-left"></i>
+                    Back to Dashboard
+                </a>
+                <div>
+                    <h1>Portfolio History</h1>
+                    <div class="subtitle">Complete timeline of portfolio changes and rebalancing</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="activity-log">
+            <div class="log-header">
+                <div class="log-title">📜 Portfolio Snapshots & Activity</div>
+                <div class="stat-change neutral" id="history-count">Loading...</div>
+            </div>
+            <div id="historyList" class="log-entries">
+                <div class="loading">
+                    <i class="fas fa-spinner"></i>
+                    <p>Loading portfolio history...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="action-buttons" style="margin-top: 30px;">
+            <button class="btn btn-primary" onclick="regenerateHistory()">
+                <i class="fas fa-sync-alt"></i> Regenerate History
+            </button>
+            <button class="btn btn-secondary" onclick="clearHistory()">
+                <i class="fas fa-trash"></i> Clear History
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Load history on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('History page loaded');
+            loadPortfolioHistory();
+        });
+
+        async function loadPortfolioHistory() {
+            console.log('Loading portfolio history...');
+            try {
+                const response = await fetch('/api/portfolio/history');
+                const data = await response.json();
+
+                console.log('History API response:', data);
+
+                if (data.success && data.data && data.data.length > 0) {
+                    document.getElementById('history-count').textContent = `${data.data.length} snapshots`;
+                    displayHistory(data.data);
+                } else {
+                    showEmptyState();
+                }
+            } catch (error) {
+                console.error('Error loading history:', error);
+                showError('Failed to load history: ' + error.message);
+            }
+        }
+
+        function displayHistory(history) {
+            const historyList = document.getElementById('historyList');
+            historyList.innerHTML = '';
+
+            history.forEach((entry, index) => {
+                const timestamp = new Date(entry.timestamp);
+                const formattedTime = timestamp.toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                let actionClass = 'hold';
+                let actionText = entry.action || 'SNAPSHOT';
+                if (entry.action === 'BUY') actionClass = 'buy';
+                else if (entry.action === 'SELL') actionClass = 'sell';
+                else if (entry.action === 'REBALANCE') actionClass = 'rebalance';
+
+                let stocksHTML = '';
+                if (entry.notes && entry.notes.trim()) {
+                    stocksHTML = `<div class="log-stocks">${entry.notes}</div>`;
+                }
+
+                const entryHTML = `
+                    <div class="log-entry">
+                        <div class="log-time">${formattedTime}</div>
+                        <div class="log-content">
+                            <div class="log-action ${actionClass}">${actionText}</div>
+                            <div class="log-description">
+                                Portfolio snapshot #${history.length - index} -
+                                Total Stocks: ${entry.total_stocks || 0}
+                            </div>
+                            ${stocksHTML}
+                        </div>
+                    </div>
+                `;
+
+                historyList.innerHTML += entryHTML;
+            });
+        }
+
+        function showEmptyState() {
+            const historyList = document.getElementById('historyList');
+            historyList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-history"></i>
+                    <h3>No History Yet</h3>
+                    <p>Your portfolio history will appear here after the first rebalance</p>
+                </div>
+            `;
+            document.getElementById('history-count').textContent = '0 snapshots';
+        }
+
+        function showError(message) {
+            const historyList = document.getElementById('historyList');
+            historyList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Error Loading History</h3>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        async function regenerateHistory() {
+            if (!confirm('This will clear existing history and regenerate 42 weeks of data. Continue?')) {
+                return;
+            }
+
+            try {
+                // Clear first
+                const clearRes = await fetch('/api/admin/clear-history', { method: 'POST' });
+                const clearData = await clearRes.json();
+
+                if (!clearData.success) {
+                    alert('Error clearing history: ' + clearData.error);
+                    return;
+                }
+
+                // Then regenerate
+                const genRes = await fetch('/api/admin/populate-history', { method: 'POST' });
+                const genData = await genRes.json();
+
+                if (genData.success) {
+                    alert(`History regenerated!\n\nGenerated ${genData.generated} snapshots`);
+                    loadPortfolioHistory();
+                } else {
+                    alert('Error generating history: ' + genData.error);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function clearHistory() {
+            if (!confirm('Are you sure you want to delete all portfolio history? This cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/admin/clear-history', { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(`Cleared ${data.deleted_snapshots} snapshots and ${data.deleted_logs} log entries`);
+                    showEmptyState();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

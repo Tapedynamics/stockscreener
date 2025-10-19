@@ -228,6 +228,30 @@ def chart():
     return render_template('chart.html')
 
 
+@app.route('/history')
+def history():
+    """Pagina dedicata allo storico portfolio"""
+    return render_template('history.html')
+
+
+@app.route('/settings')
+def settings():
+    """Pagina dedicata alle impostazioni"""
+    return render_template('settings.html')
+
+
+@app.route('/compare')
+def compare():
+    """Pagina dedicata al confronto snapshot"""
+    return render_template('compare.html')
+
+
+@app.route('/benchmark')
+def benchmark():
+    """Pagina dedicata al benchmark S&P 500"""
+    return render_template('benchmark.html')
+
+
 @app.route('/api/screener', methods=['GET'])
 def run_screener():
     """API endpoint per eseguire lo screener"""

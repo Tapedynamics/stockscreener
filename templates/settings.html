@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - AI Stock Screener</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1a1f3a 0%, #2d1b4e 100%);
+            color: #e4e8f0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .back-btn {
+            background: rgba(102, 126, 234, 0.2);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            color: #667eea;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .back-btn:hover {
+            background: rgba(102, 126, 234, 0.3);
+            transform: translateX(-3px);
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #8b92a7;
+            margin-top: 5px;
+        }
+
+        .btn-save {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .btn-save:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .settings-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .settings-section {
+            margin-bottom: 40px;
+        }
+
+        .settings-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .setting-item {
+            margin-bottom: 20px;
+        }
+
+        .setting-label {
+            display: block;
+            font-size: 14px;
+            color: #b4b9c7;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .setting-input {
+            width: 100%;
+            padding: 12px 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: #e4e8f0;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .setting-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .setting-input[type="checkbox"] {
+            width: auto;
+            margin-right: 10px;
+        }
+
+        .info-box {
+            margin-top: 30px;
+            padding: 15px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            color: #667eea;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .info-box strong {
+            font-weight: 600;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #8b92a7;
+        }
+
+        .loading i {
+            font-size: 24px;
+            margin-bottom: 10px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-left">
+                <a href="/" class="back-btn">
+                    <i class="fas fa-arrow-left"></i>
+                    Back to Dashboard
+                </a>
+                <div>
+                    <h1>Settings</h1>
+                    <div class="subtitle">Configure portfolio and scheduler settings</div>
+                </div>
+            </div>
+            <button class="btn-save" onclick="saveSettings()">
+                <i class="fas fa-save"></i> Save Settings
+            </button>
+        </div>
+
+        <div class="settings-card">
+            <!-- Scheduler Settings -->
+            <div class="settings-section">
+                <div class="section-title">
+                    <i class="fas fa-clock"></i>
+                    Scheduler Configuration
+                </div>
+
+                <div class="setting-item">
+                    <label class="setting-label">Rebalance Day</label>
+                    <select id="setting-day" class="setting-input">
+                        <option value="mon">Monday</option>
+                        <option value="tue">Tuesday</option>
+                        <option value="wed">Wednesday</option>
+                        <option value="thu">Thursday</option>
+                        <option value="fri">Friday</option>
+                        <option value="sat">Saturday</option>
+                        <option value="sun">Sunday</option>
+                    </select>
+                </div>
+
+                <div class="setting-item">
+                    <label class="setting-label">Rebalance Time (24h format)</label>
+                    <input type="time" id="setting-time" class="setting-input" value="19:00">
+                </div>
+
+                <div class="setting-item">
+                    <label class="setting-label">Timezone</label>
+                    <select id="setting-timezone" class="setting-input">
+                        <option value="Europe/Rome">Europe/Rome (CET)</option>
+                        <option value="America/New_York">America/New_York (EST)</option>
+                        <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
+                        <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
+                        <option value="UTC">UTC</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Portfolio Settings -->
+            <div class="settings-section">
+                <div class="section-title">
+                    <i class="fas fa-chart-line"></i>
+                    Portfolio Configuration
+                </div>
+
+                <div class="setting-item">
+                    <label class="setting-label">Initial Portfolio Value ($)</label>
+                    <input type="number" id="setting-initial-value" class="setting-input" value="150000" step="1000" min="1000">
+                </div>
+
+                <div class="setting-item">
+                    <label class="setting-label">Take Profit Positions</label>
+                    <input type="number" id="setting-take-profit-count" class="setting-input" value="3" min="1" max="10">
+                </div>
+
+                <div class="setting-item">
+                    <label class="setting-label">Hold Positions</label>
+                    <input type="number" id="setting-hold-count" class="setting-input" value="10" min="5" max="20">
+                </div>
+
+                <div class="setting-item">
+                    <label class="setting-label">Buffer Positions</label>
+                    <input type="number" id="setting-buffer-count" class="setting-input" value="2" min="1" max="5">
+                </div>
+            </div>
+
+            <!-- Notification Settings -->
+            <div class="settings-section">
+                <div class="section-title">
+                    <i class="fas fa-bell"></i>
+                    Notifications
+                </div>
+
+                <div class="setting-item">
+                    <label class="setting-label">
+                        <input type="checkbox" id="setting-notify-rebalance">
+                        Notify on Rebalance
+                    </label>
+                </div>
+
+                <div class="setting-item">
+                    <label class="setting-label">
+                        <input type="checkbox" id="setting-notify-changes" checked>
+                        Notify on Portfolio Changes
+                    </label>
+                </div>
+            </div>
+
+            <div class="info-box">
+                <strong><i class="fas fa-info-circle"></i> Note:</strong> Some settings may require server restart to take effect. Changes to scheduler will be applied on next deployment or server restart.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load settings on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Settings page loaded');
+            loadSettings();
+        });
+
+        async function loadSettings() {
+            console.log('Loading settings...');
+            try {
+                const response = await fetch('/api/settings');
+                const data = await response.json();
+
+                if (data.success) {
+                    const settings = data.data;
+
+                    // Scheduler settings
+                    if (settings.scheduler_day) document.getElementById('setting-day').value = settings.scheduler_day;
+                    if (settings.scheduler_time) document.getElementById('setting-time').value = settings.scheduler_time;
+                    if (settings.scheduler_timezone) document.getElementById('setting-timezone').value = settings.scheduler_timezone;
+
+                    // Portfolio settings
+                    if (settings.initial_value) document.getElementById('setting-initial-value').value = settings.initial_value;
+                    if (settings.take_profit_count) document.getElementById('setting-take-profit-count').value = settings.take_profit_count;
+                    if (settings.hold_count) document.getElementById('setting-hold-count').value = settings.hold_count;
+                    if (settings.buffer_count) document.getElementById('setting-buffer-count').value = settings.buffer_count;
+
+                    // Notification settings
+                    if (settings.notify_rebalance !== undefined) document.getElementById('setting-notify-rebalance').checked = settings.notify_rebalance === 'true';
+                    if (settings.notify_changes !== undefined) document.getElementById('setting-notify-changes').checked = settings.notify_changes === 'true';
+
+                    console.log('Settings loaded successfully');
+                } else {
+                    console.error('Failed to load settings:', data.error);
+                }
+            } catch (err) {
+                console.error('Error loading settings:', err);
+            }
+        }
+
+        async function saveSettings() {
+            const settings = {
+                scheduler_day: document.getElementById('setting-day').value,
+                scheduler_time: document.getElementById('setting-time').value,
+                scheduler_timezone: document.getElementById('setting-timezone').value,
+                initial_value: document.getElementById('setting-initial-value').value,
+                take_profit_count: document.getElementById('setting-take-profit-count').value,
+                hold_count: document.getElementById('setting-hold-count').value,
+                buffer_count: document.getElementById('setting-buffer-count').value,
+                notify_rebalance: document.getElementById('setting-notify-rebalance').checked.toString(),
+                notify_changes: document.getElementById('setting-notify-changes').checked.toString()
+            };
+
+            console.log('Saving settings:', settings);
+
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(settings)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('✅ Settings saved successfully!\n\nNote: Some changes may require server restart to take effect.');
+                } else {
+                    alert('❌ Error saving settings: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('❌ Error saving settings: ' + err.message);
+            }
+        }
+    </script>
+</body>
+</html>

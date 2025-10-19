@@ -709,12 +709,12 @@
 
         <!-- Navigation Tabs -->
         <div class="tabs-container">
-            <button class="tab-button active" onclick="switchTab(event, 'portfolio')">📊 Portfolio</button>
-            <button class="tab-button" onclick="switchTab(event, 'history')">📜 History</button>
+            <button class="tab-button active">📊 Portfolio</button>
+            <a href="/history" class="tab-button" style="text-decoration: none; display: inline-block;">📜 History</a>
             <a href="/chart" class="tab-button" style="text-decoration: none; display: inline-block;">📈 Charts</a>
-            <button class="tab-button" onclick="switchTab(event, 'compare')">⚖️ Compare</button>
-            <button class="tab-button" onclick="switchTab(event, 'benchmark')">📊 Benchmark</button>
-            <button class="tab-button" onclick="switchTab(event, 'settings')">⚙️ Settings</button>
+            <a href="/compare" class="tab-button" style="text-decoration: none; display: inline-block;">⚖️ Compare</a>
+            <a href="/benchmark" class="tab-button" style="text-decoration: none; display: inline-block;">📊 Benchmark</a>
+            <a href="/settings" class="tab-button" style="text-decoration: none; display: inline-block;">⚙️ Settings</a>
         </div>
 
         <!-- Loading -->
@@ -785,146 +785,6 @@
                             <div class="log-action buy">BUY Signal</div>
                             <div class="log-description">Added 2 new positions to portfolio based on improved fundamentals</div>
                         </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tab Content: History -->
-        <div id="tab-history" class="tab-content">
-            <div class="activity-log">
-                <div class="log-header">
-                    <div class="log-title">📜 Portfolio History</div>
-                    <div class="stat-change neutral">Showing last 10 snapshots</div>
-                </div>
-                <div id="historyList" class="log-entries">
-                    <div class="log-entry">
-                        <div class="log-time">Loading...</div>
-                        <div class="log-content">
-                            <div class="log-description">Fetching portfolio history...</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tab Content: Compare (Placeholder) -->
-        <div id="tab-compare" class="tab-content">
-            <div class="activity-log">
-                <div class="log-header">
-                    <div class="log-title">⚖️ Compare Snapshots</div>
-                </div>
-                <div style="padding: 60px; text-align: center; color: #8b92a7;">
-                    <h3>Coming Soon</h3>
-                    <p>Compare different portfolio snapshots side by side</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tab Content: Benchmark (Placeholder) -->
-        <div id="tab-benchmark" class="tab-content">
-            <div class="activity-log">
-                <div class="log-header">
-                    <div class="log-title">📊 S&P 500 Benchmark</div>
-                </div>
-                <div style="padding: 60px; text-align: center; color: #8b92a7;">
-                    <h3>Coming Soon</h3>
-                    <p>Compare portfolio performance against S&P 500 index</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tab Content: Settings -->
-        <div id="tab-settings" class="tab-content">
-            <div class="activity-log">
-                <div class="log-header">
-                    <div class="log-title">⚙️ Settings</div>
-                    <button class="btn-secondary" onclick="saveSettings()" style="padding: 10px 20px; font-size: 0.9em;">
-                        💾 Save Settings
-                    </button>
-                </div>
-
-                <div style="padding: 30px;">
-                    <!-- Scheduler Settings -->
-                    <div class="settings-section">
-                        <h3 style="color: #fff; margin-bottom: 20px; font-size: 1.2em;">🕐 Scheduler Configuration</h3>
-
-                        <div class="setting-item">
-                            <label class="setting-label">Rebalance Day</label>
-                            <select id="setting-day" class="setting-input">
-                                <option value="mon">Monday</option>
-                                <option value="tue">Tuesday</option>
-                                <option value="wed">Wednesday</option>
-                                <option value="thu">Thursday</option>
-                                <option value="fri">Friday</option>
-                                <option value="sat">Saturday</option>
-                                <option value="sun">Sunday</option>
-                            </select>
-                        </div>
-
-                        <div class="setting-item">
-                            <label class="setting-label">Rebalance Time (24h format)</label>
-                            <input type="time" id="setting-time" class="setting-input" value="19:00">
-                        </div>
-
-                        <div class="setting-item">
-                            <label class="setting-label">Timezone</label>
-                            <select id="setting-timezone" class="setting-input">
-                                <option value="Europe/Rome">Europe/Rome (CET)</option>
-                                <option value="America/New_York">America/New_York (EST)</option>
-                                <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
-                                <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
-                                <option value="UTC">UTC</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Portfolio Settings -->
-                    <div class="settings-section" style="margin-top: 40px;">
-                        <h3 style="color: #fff; margin-bottom: 20px; font-size: 1.2em;">📊 Portfolio Configuration</h3>
-
-                        <div class="setting-item">
-                            <label class="setting-label">Initial Portfolio Value ($)</label>
-                            <input type="number" id="setting-initial-value" class="setting-input" value="150000" step="1000">
-                        </div>
-
-                        <div class="setting-item">
-                            <label class="setting-label">Take Profit Positions</label>
-                            <input type="number" id="setting-take-profit-count" class="setting-input" value="3" min="1" max="10">
-                        </div>
-
-                        <div class="setting-item">
-                            <label class="setting-label">Hold Positions</label>
-                            <input type="number" id="setting-hold-count" class="setting-input" value="10" min="5" max="20">
-                        </div>
-
-                        <div class="setting-item">
-                            <label class="setting-label">Buffer Positions</label>
-                            <input type="number" id="setting-buffer-count" class="setting-input" value="2" min="1" max="5">
-                        </div>
-                    </div>
-
-                    <!-- Notification Settings -->
-                    <div class="settings-section" style="margin-top: 40px;">
-                        <h3 style="color: #fff; margin-bottom: 20px; font-size: 1.2em;">🔔 Notifications</h3>
-
-                        <div class="setting-item">
-                            <label class="setting-label">
-                                <input type="checkbox" id="setting-notify-rebalance" style="margin-right: 10px;">
-                                Notify on Rebalance
-                            </label>
-                        </div>
-
-                        <div class="setting-item">
-                            <label class="setting-label">
-                                <input type="checkbox" id="setting-notify-changes" style="margin-right: 10px;" checked>
-                                Notify on Portfolio Changes
-                            </label>
-                        </div>
-                    </div>
-
-                    <div style="margin-top: 30px; padding: 15px; background: rgba(102, 126, 234, 0.1); border-radius: 10px; color: #667eea;">
-                        <strong>Note:</strong> Some settings may require server restart to take effect. Changes to scheduler will be applied on next deployment.
                     </div>
                 </div>
             </div>
