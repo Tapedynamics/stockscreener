@@ -190,6 +190,7 @@ class Database:
                 'hold': json.loads(row['hold']),
                 'buffer': json.loads(row['buffer']),
                 'total_stocks': row['total_stocks'],
+                'portfolio_value': row['portfolio_value'],
                 'notes': row['notes']
             })
 
