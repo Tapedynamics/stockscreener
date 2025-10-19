@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Screener - Finviz</title>
+    <title>AI Portfolio Manager - Stock Screener</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -12,86 +13,188 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0a0e27;
+            color: #e4e8f0;
             min-height: 100vh;
+            padding: 0;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #1a1f3a 0%, #2d1b3d 100%);
+            padding: 20px 40px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             display: flex;
-            justify-content: center;
+            justify-content: space-between;
             align-items: center;
-            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         }
 
-        .container {
-            background: white;
+        .header h1 {
+            font-size: 1.8em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .ai-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(102, 126, 234, 0.1);
+            padding: 10px 20px;
             border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background: #10b981;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .ai-status-text {
+            font-size: 0.9em;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        /* Main Container */
+        .main-container {
+            max-width: 1600px;
+            margin: 0 auto;
             padding: 40px;
-            max-width: 800px;
-            width: 100%;
         }
 
-        h1 {
-            color: #333;
-            text-align: center;
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
             margin-bottom: 30px;
-            font-size: 2.5em;
         }
 
-        .subtitle {
-            text-align: center;
-            color: #666;
-            margin-bottom: 40px;
-            font-size: 1.1em;
+        .stat-card {
+            background: linear-gradient(135deg, #1a1f3a 0%, #2d1b3d 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 25px;
+            transition: all 0.3s ease;
         }
 
-        .button-container {
-            text-align: center;
-            margin-bottom: 40px;
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.2);
+            border-color: rgba(102, 126, 234, 0.5);
         }
 
-        #runScreener {
+        .stat-label {
+            font-size: 0.85em;
+            color: #8b92a7;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .stat-change {
+            font-size: 0.9em;
+            margin-top: 8px;
+        }
+
+        .stat-change.positive {
+            color: #10b981;
+        }
+
+        .stat-change.negative {
+            color: #ef4444;
+        }
+
+        /* Control Panel */
+        .control-panel {
+            background: linear-gradient(135deg, #1a1f3a 0%, #2d1b3d 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .control-info {
+            flex: 1;
+        }
+
+        .next-rebalance {
+            font-size: 0.9em;
+            color: #8b92a7;
+            margin-bottom: 5px;
+        }
+
+        .rebalance-time {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .btn-primary {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            padding: 18px 50px;
-            font-size: 1.2em;
-            font-weight: bold;
-            border-radius: 50px;
+            padding: 15px 40px;
+            font-size: 1em;
+            font-weight: 600;
+            border-radius: 10px;
             cursor: pointer;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
         }
 
-        #runScreener:hover {
+        .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
         }
 
-        #runScreener:active {
+        .btn-primary:active {
             transform: translateY(0);
         }
 
-        #runScreener:disabled {
-            opacity: 0.6;
+        .btn-primary:disabled {
+            opacity: 0.5;
             cursor: not-allowed;
         }
 
+        /* Loading */
         .loading {
             text-align: center;
-            color: #667eea;
-            font-size: 1.2em;
-            margin: 20px 0;
+            padding: 60px;
             display: none;
         }
 
         .spinner {
-            border: 4px solid #f3f3f3;
+            border: 4px solid rgba(255, 255, 255, 0.1);
             border-top: 4px solid #667eea;
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
+            width: 50px;
+            height: 50px;
             animation: spin 1s linear infinite;
-            margin: 20px auto;
+            margin: 0 auto 20px;
         }
 
         @keyframes spin {
@@ -99,134 +202,372 @@
             100% { transform: rotate(360deg); }
         }
 
-        .results {
-            display: none;
-        }
-
-        .basket-section {
+        /* Portfolio Grid */
+        .portfolio-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
             margin-bottom: 30px;
-            padding: 20px;
-            border-radius: 10px;
-            background: #f8f9fa;
         }
 
-        .basket-section h2 {
-            color: #333;
-            margin-bottom: 15px;
-            font-size: 1.5em;
+        .portfolio-section {
+            background: linear-gradient(135deg, #1a1f3a 0%, #2d1b3d 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 25px;
+            transition: all 0.3s ease;
+        }
+
+        .portfolio-section:hover {
+            border-color: rgba(102, 126, 234, 0.5);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .section-header {
             display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .section-title {
+            font-size: 1.2em;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .section-badge {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-profit {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .badge-hold {
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+            border: 1px solid rgba(251, 191, 36, 0.3);
+        }
+
+        .badge-buffer {
+            background: rgba(139, 146, 167, 0.2);
+            color: #8b92a7;
+            border: 1px solid rgba(139, 146, 167, 0.3);
+        }
+
+        /* Stock Cards */
+        .stock-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .stock-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 15px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .stock-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(102, 126, 234, 0.5);
+            transform: translateX(5px);
+        }
+
+        .stock-header {
+            display: flex;
+            justify-content: space-between;
             align-items: center;
         }
 
-        .badge {
-            display: inline-block;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.8em;
-            margin-left: 10px;
-            font-weight: normal;
+        .stock-ticker {
+            font-size: 1.1em;
+            font-weight: 700;
+            color: #fff;
         }
 
-        .badge.take-profit {
-            background: #28a745;
-            color: white;
+        .stock-performance {
+            font-size: 0.9em;
+            font-weight: 600;
         }
 
-        .badge.hold {
-            background: #ffc107;
-            color: #333;
+        .stock-performance.positive {
+            color: #10b981;
         }
 
-        .badge.buffer {
-            background: #6c757d;
-            color: white;
+        .stock-performance.negative {
+            color: #ef4444;
         }
 
-        .ticker-list {
+        .stock-performance.neutral {
+            color: #8b92a7;
+        }
+
+        .stock-meta {
             display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
+            gap: 15px;
+            margin-top: 8px;
+            font-size: 0.85em;
+            color: #8b92a7;
         }
 
-        .ticker {
-            background: white;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-weight: bold;
-            color: #333;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            transition: all 0.2s ease;
+        /* Activity Log */
+        .activity-log {
+            background: linear-gradient(135deg, #1a1f3a 0%, #2d1b3d 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 25px;
         }
 
-        .ticker:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .error {
-            background: #f8d7da;
-            color: #721c24;
+        .log-title {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .log-entries {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .log-entry {
+            display: flex;
+            gap: 15px;
             padding: 15px;
-            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            border-left: 3px solid #667eea;
+        }
+
+        .log-time {
+            font-size: 0.85em;
+            color: #8b92a7;
+            white-space: nowrap;
+        }
+
+        .log-content {
+            flex: 1;
+        }
+
+        .log-action {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .log-action.buy {
+            color: #10b981;
+        }
+
+        .log-action.sell {
+            color: #ef4444;
+        }
+
+        .log-action.hold {
+            color: #fbbf24;
+        }
+
+        .log-description {
+            font-size: 0.9em;
+            color: #8b92a7;
+        }
+
+        /* Error */
+        .error {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            padding: 15px;
+            border-radius: 10px;
             margin-top: 20px;
             display: none;
         }
 
-        .info {
-            text-align: center;
-            color: #666;
-            font-size: 0.9em;
-            margin-top: 20px;
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+
+            .main-container {
+                padding: 20px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .portfolio-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .control-panel {
+                flex-direction: column;
+                gap: 20px;
+                text-align: center;
+            }
+        }
+
+        /* Scrollbar */
+        .log-entries::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .log-entries::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+
+        .log-entries::-webkit-scrollbar-thumb {
+            background: rgba(102, 126, 234, 0.5);
+            border-radius: 10px;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>📊 Stock Screener</h1>
-        <p class="subtitle">Finviz - Large Cap Value Stocks</p>
+    <!-- Header -->
+    <div class="header">
+        <h1>🤖 AI Portfolio Manager</h1>
+        <div class="ai-status">
+            <div class="status-dot"></div>
+            <span class="ai-status-text">Agent Active</span>
+        </div>
+    </div>
 
-        <div class="button-container">
-            <button id="runScreener" onclick="runScreener()">
-                Esegui Screener
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Portfolio Value</div>
+                <div class="stat-value">$150,000</div>
+                <div class="stat-change positive">+12.5% All Time</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Positions</div>
+                <div class="stat-value" id="totalPositions">15</div>
+                <div class="stat-change neutral">Active Stocks</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Weekly Performance</div>
+                <div class="stat-value">+3.2%</div>
+                <div class="stat-change positive">+$4,800</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Next Rebalance</div>
+                <div class="stat-value">Monday</div>
+                <div class="stat-change neutral">19:00 CET</div>
+            </div>
+        </div>
+
+        <!-- Control Panel -->
+        <div class="control-panel">
+            <div class="control-info">
+                <div class="next-rebalance">AI Agent Status</div>
+                <div class="rebalance-time">Automated Weekly Rebalancing at Monday 19:00</div>
+            </div>
+            <button class="btn-primary" id="runScreener" onclick="runScreener()">
+                Run Screener Now
             </button>
         </div>
 
+        <!-- Loading -->
         <div class="loading" id="loading">
             <div class="spinner"></div>
-            <p>Caricamento dati da Finviz...</p>
+            <p>AI Agent analyzing market data...</p>
         </div>
 
+        <!-- Error -->
         <div class="error" id="error"></div>
 
-        <div class="results" id="results">
-            <!-- TOP 3 -->
-            <div class="basket-section">
-                <h2>
-                    Top 3 - Take Profit
-                    <span class="badge take-profit">Posizioni 1-3</span>
-                </h2>
-                <div class="ticker-list" id="takeProfitList"></div>
+        <!-- Results -->
+        <div id="results" style="display: none;">
+            <!-- Portfolio Grid -->
+            <div class="portfolio-grid">
+                <!-- Take Profit Section -->
+                <div class="portfolio-section">
+                    <div class="section-header">
+                        <div class="section-title">Take Profit</div>
+                        <div class="section-badge badge-profit">Top 3</div>
+                    </div>
+                    <div class="stock-cards" id="takeProfitList"></div>
+                </div>
+
+                <!-- Hold Section -->
+                <div class="portfolio-section">
+                    <div class="section-header">
+                        <div class="section-title">Core Holdings</div>
+                        <div class="section-badge badge-hold">10 Positions</div>
+                    </div>
+                    <div class="stock-cards" id="holdList"></div>
+                </div>
+
+                <!-- Buffer Section -->
+                <div class="portfolio-section">
+                    <div class="section-header">
+                        <div class="section-title">Buffer Zone</div>
+                        <div class="section-badge badge-buffer">2 Reserve</div>
+                    </div>
+                    <div class="stock-cards" id="bufferList"></div>
+                </div>
             </div>
 
-            <!-- 10 HOLD -->
-            <div class="basket-section">
-                <h2>
-                    10 Hold - Basket
-                    <span class="badge hold">Posizioni 4-13</span>
-                </h2>
-                <div class="ticker-list" id="holdList"></div>
+            <!-- Activity Log -->
+            <div class="activity-log">
+                <div class="log-header">
+                    <div class="log-title">📋 AI Agent Activity Log</div>
+                    <div class="stat-change neutral">Last updated: Just now</div>
+                </div>
+                <div class="log-entries">
+                    <div class="log-entry">
+                        <div class="log-time">Just now</div>
+                        <div class="log-content">
+                            <div class="log-action">Portfolio Scanned</div>
+                            <div class="log-description">AI Agent analyzed Finviz screener and identified 15 high-potential stocks matching criteria</div>
+                        </div>
+                    </div>
+                    <div class="log-entry">
+                        <div class="log-time">Mon 19:00</div>
+                        <div class="log-content">
+                            <div class="log-action hold">HOLD Decision</div>
+                            <div class="log-description">Maintained current positions - All stocks still meet quality criteria</div>
+                        </div>
+                    </div>
+                    <div class="log-entry">
+                        <div class="log-time">Last Week</div>
+                        <div class="log-content">
+                            <div class="log-action buy">BUY Signal</div>
+                            <div class="log-description">Added 2 new positions to portfolio based on improved fundamentals</div>
+                        </div>
+                    </div>
+                </div>
             </div>
-
-            <!-- 2 BUFFER -->
-            <div class="basket-section">
-                <h2>
-                    2 Buffer
-                    <span class="badge buffer">Posizioni 14-15</span>
-                </h2>
-                <div class="ticker-list" id="bufferList"></div>
-            </div>
-
-            <div class="info" id="info"></div>
         </div>
     </div>
 
@@ -248,13 +589,12 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    // Popola i risultati
                     displayResults(data.data);
                 } else {
-                    showError(data.error || 'Errore sconosciuto');
+                    showError(data.error || 'Unknown error');
                 }
             } catch (err) {
-                showError('Errore di connessione: ' + err.message);
+                showError('Connection error: ' + err.message);
             } finally {
                 button.disabled = false;
                 loading.style.display = 'none';
@@ -266,39 +606,66 @@
             const takeProfitList = document.getElementById('takeProfitList');
             const holdList = document.getElementById('holdList');
             const bufferList = document.getElementById('bufferList');
-            const info = document.getElementById('info');
+            const totalPositions = document.getElementById('totalPositions');
 
             // Clear previous results
             takeProfitList.innerHTML = '';
             holdList.innerHTML = '';
             bufferList.innerHTML = '';
 
+            // Update total positions
+            totalPositions.textContent = basket.total_found;
+
             // Take Profit
-            basket.take_profit.forEach(ticker => {
-                takeProfitList.innerHTML += `<div class="ticker">${ticker}</div>`;
+            basket.take_profit.forEach((ticker, index) => {
+                takeProfitList.innerHTML += createStockCard(ticker, index + 1, 'profit');
             });
 
             // Hold
-            basket.hold.forEach(ticker => {
-                holdList.innerHTML += `<div class="ticker">${ticker}</div>`;
+            basket.hold.forEach((ticker, index) => {
+                holdList.innerHTML += createStockCard(ticker, index + 4, 'hold');
             });
 
             // Buffer
-            basket.buffer.forEach(ticker => {
-                bufferList.innerHTML += `<div class="ticker">${ticker}</div>`;
+            basket.buffer.forEach((ticker, index) => {
+                bufferList.innerHTML += createStockCard(ticker, index + 14, 'buffer');
             });
-
-            // Info
-            info.textContent = `Totale ticker trovati: ${basket.total_found}`;
 
             results.style.display = 'block';
         }
 
+        function createStockCard(ticker, position, type) {
+            // Simulated performance for demo
+            const perf = (Math.random() * 10 - 2).toFixed(2);
+            const perfClass = perf > 0 ? 'positive' : perf < 0 ? 'negative' : 'neutral';
+            const perfSign = perf > 0 ? '+' : '';
+
+            return `
+                <div class="stock-card">
+                    <div class="stock-header">
+                        <div class="stock-ticker">${ticker}</div>
+                        <div class="stock-performance ${perfClass}">${perfSign}${perf}%</div>
+                    </div>
+                    <div class="stock-meta">
+                        <span>Position #${position}</span>
+                        <span>•</span>
+                        <span>${type === 'profit' ? 'Take Profit' : type === 'hold' ? 'Hold' : 'Buffer'}</span>
+                    </div>
+                </div>
+            `;
+        }
+
         function showError(message) {
             const error = document.getElementById('error');
-            error.textContent = 'Errore: ' + message;
+            error.textContent = 'Error: ' + message;
             error.style.display = 'block';
         }
+
+        // Auto-load on page load
+        window.addEventListener('load', () => {
+            // Uncomment to auto-run on page load
+            // runScreener();
+        });
     </script>
 </body>
 </html>
