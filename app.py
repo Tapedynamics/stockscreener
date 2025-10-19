@@ -296,7 +296,7 @@ def run_screener():
             # If last snapshot was less than 6 hours ago, skip creating new one
             if hours_since_last < 6:
                 should_create_new_snapshot = False
-                new_portfolio_value = previous_portfolio.get('portfolio_value')
+                new_portfolio_value = previous_portfolio.get('portfolio_value') or float(db.get_setting('initial_value', '150000'))
                 logger.info(f"Recent snapshot exists ({hours_since_last:.1f}h ago) - Skipping new snapshot - Value: ${new_portfolio_value:,.2f}")
             else:
                 # More than 6 hours - calculate new value with simulated return
