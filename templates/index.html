@@ -180,6 +180,66 @@
             cursor: not-allowed;
         }
 
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 15px 30px;
+            font-size: 1em;
+            font-weight: 600;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        /* Tabs */
+        .tabs-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            overflow-x: auto;
+            padding-bottom: 10px;
+        }
+
+        .tab-button {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #8b92a7;
+            padding: 12px 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .tab-button:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(102, 126, 234, 0.3);
+            color: #667eea;
+        }
+
+        .tab-button.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: transparent;
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
         /* Loading */
         .loading {
             text-align: center;
@@ -492,9 +552,24 @@
                 <div class="next-rebalance">AI Agent Status</div>
                 <div class="rebalance-time">Automated Weekly Rebalancing at Monday 19:00</div>
             </div>
-            <button class="btn-primary" id="runScreener" onclick="runScreener()">
-                Run Screener Now
-            </button>
+            <div style="display: flex; gap: 15px;">
+                <button class="btn-primary" id="runScreener" onclick="runScreener()">
+                    Run Screener Now
+                </button>
+                <button class="btn-secondary" onclick="exportCSV()">
+                    📥 Export CSV
+                </button>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="tabs-container">
+            <button class="tab-button active" onclick="switchTab('portfolio')">📊 Portfolio</button>
+            <button class="tab-button" onclick="switchTab('history')">📜 History</button>
+            <button class="tab-button" onclick="switchTab('charts')">📈 Charts</button>
+            <button class="tab-button" onclick="switchTab('compare')">⚖️ Compare</button>
+            <button class="tab-button" onclick="switchTab('benchmark')">📊 Benchmark</button>
+            <button class="tab-button" onclick="switchTab('settings')">⚙️ Settings</button>
         </div>
 
         <!-- Loading -->
@@ -506,8 +581,8 @@
         <!-- Error -->
         <div class="error" id="error"></div>
 
-        <!-- Results -->
-        <div id="results" style="display: none;">
+        <!-- Tab Content: Portfolio -->
+        <div id="tab-portfolio" class="tab-content active">
             <!-- Portfolio Grid -->
             <div class="portfolio-grid">
                 <!-- Take Profit Section -->
@@ -569,6 +644,77 @@
                 </div>
             </div>
         </div>
+
+        <!-- Tab Content: History -->
+        <div id="tab-history" class="tab-content">
+            <div class="activity-log">
+                <div class="log-header">
+                    <div class="log-title">📜 Portfolio History</div>
+                    <div class="stat-change neutral">Showing last 10 snapshots</div>
+                </div>
+                <div id="historyList" class="log-entries">
+                    <div class="log-entry">
+                        <div class="log-time">Loading...</div>
+                        <div class="log-content">
+                            <div class="log-description">Fetching portfolio history...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Content: Charts (Placeholder) -->
+        <div id="tab-charts" class="tab-content">
+            <div class="activity-log">
+                <div class="log-header">
+                    <div class="log-title">📈 Performance Charts</div>
+                </div>
+                <div style="padding: 60px; text-align: center; color: #8b92a7;">
+                    <h3>Coming Soon</h3>
+                    <p>Performance charts and visualizations will be available here</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Content: Compare (Placeholder) -->
+        <div id="tab-compare" class="tab-content">
+            <div class="activity-log">
+                <div class="log-header">
+                    <div class="log-title">⚖️ Compare Snapshots</div>
+                </div>
+                <div style="padding: 60px; text-align: center; color: #8b92a7;">
+                    <h3>Coming Soon</h3>
+                    <p>Compare different portfolio snapshots side by side</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Content: Benchmark (Placeholder) -->
+        <div id="tab-benchmark" class="tab-content">
+            <div class="activity-log">
+                <div class="log-header">
+                    <div class="log-title">📊 S&P 500 Benchmark</div>
+                </div>
+                <div style="padding: 60px; text-align: center; color: #8b92a7;">
+                    <h3>Coming Soon</h3>
+                    <p>Compare portfolio performance against S&P 500 index</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Content: Settings (Placeholder) -->
+        <div id="tab-settings" class="tab-content">
+            <div class="activity-log">
+                <div class="log-header">
+                    <div class="log-title">⚙️ Settings</div>
+                </div>
+                <div style="padding: 60px; text-align: center; color: #8b92a7;">
+                    <h3>Coming Soon</h3>
+                    <p>Configure rebalancing schedule and portfolio settings</p>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <script>
@@ -819,6 +965,114 @@
                 // No previous portfolio, that's ok
                 console.log('No previous portfolio found');
             }
+        }
+
+        // Tab switching
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Remove active class from all buttons
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Show selected tab
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+
+            // Add active class to clicked button
+            event.target.classList.add('active');
+
+            // Load data for specific tabs
+            if (tabName === 'history') {
+                loadPortfolioHistory();
+            }
+        }
+
+        // Load portfolio history
+        async function loadPortfolioHistory() {
+            try {
+                const response = await fetch('/api/portfolio/history');
+                const data = await response.json();
+
+                if (data.success && data.data.length > 0) {
+                    displayHistory(data.data);
+                } else {
+                    document.getElementById('historyList').innerHTML = `
+                        <div class="log-entry">
+                            <div class="log-content">
+                                <div class="log-description">No portfolio history yet. Run the screener to create your first snapshot.</div>
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                console.error('Error loading history:', err);
+            }
+        }
+
+        function displayHistory(history) {
+            const historyList = document.getElementById('historyList');
+            historyList.innerHTML = '';
+
+            history.forEach((snapshot, index) => {
+                const date = new Date(snapshot.timestamp);
+                const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+                const isLatest = index === 0;
+
+                historyList.innerHTML += `
+                    <div class="log-entry">
+                        <div class="log-time">${dateStr}</div>
+                        <div class="log-content">
+                            <div class="log-action">${isLatest ? '🟢 Current Portfolio' : '📸 Snapshot #' + snapshot.id}</div>
+                            <div class="log-description">
+                                <strong>Top 3:</strong> ${snapshot.take_profit.join(', ')}<br>
+                                <strong>Hold:</strong> ${snapshot.hold.join(', ')}<br>
+                                <strong>Buffer:</strong> ${snapshot.buffer.join(', ')}
+                                ${snapshot.notes ? '<br><em>' + snapshot.notes + '</em>' : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // Export to CSV
+        function exportCSV() {
+            fetch('/api/portfolio/latest')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        const portfolio = data.data;
+
+                        // Create CSV content
+                        let csv = 'Category,Position,Ticker\n';
+
+                        portfolio.take_profit.forEach((ticker, i) => {
+                            csv += `Take Profit,${i + 1},${ticker}\n`;
+                        });
+
+                        portfolio.hold.forEach((ticker, i) => {
+                            csv += `Hold,${i + 4},${ticker}\n`;
+                        });
+
+                        portfolio.buffer.forEach((ticker, i) => {
+                            csv += `Buffer,${i + 14},${ticker}\n`;
+                        });
+
+                        // Download CSV
+                        const blob = new Blob([csv], { type: 'text/csv' });
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `portfolio_${new Date().toISOString().split('T')[0]}.csv`;
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                    }
+                })
+                .catch(err => console.error('Export error:', err));
         }
     </script>
 </body>
