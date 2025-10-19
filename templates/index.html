@@ -590,6 +590,8 @@
 
                 if (data.success) {
                     displayResults(data.data);
+                    // Load activity log after screener runs
+                    await loadActivityLog();
                 } else {
                     showError(data.error || 'Unknown error');
                 }
@@ -599,6 +601,66 @@
                 button.disabled = false;
                 loading.style.display = 'none';
             }
+        }
+
+        async function loadActivityLog() {
+            try {
+                const response = await fetch('/api/activity-log');
+                const data = await response.json();
+
+                if (data.success && data.data.length > 0) {
+                    displayActivityLog(data.data);
+                }
+            } catch (err) {
+                console.error('Error loading activity log:', err);
+            }
+        }
+
+        function displayActivityLog(logs) {
+            const logEntries = document.querySelector('.log-entries');
+            if (!logEntries) return;
+
+            logEntries.innerHTML = '';
+
+            logs.forEach(log => {
+                const actionClass = log.action_type.toLowerCase();
+                const timeAgo = formatTimeAgo(log.timestamp);
+
+                logEntries.innerHTML += `
+                    <div class="log-entry">
+                        <div class="log-time">${timeAgo}</div>
+                        <div class="log-content">
+                            <div class="log-action ${actionClass}">${formatActionType(log.action_type)}</div>
+                            <div class="log-description">${log.description}</div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function formatActionType(actionType) {
+            const types = {
+                'BUY': 'BUY Signal',
+                'SELL': 'SELL Signal',
+                'HOLD': 'HOLD Decision',
+                'REBALANCE': 'Rebalance',
+                'SCAN': 'Portfolio Scanned',
+                'INIT': 'Portfolio Initialized'
+            };
+            return types[actionType] || actionType;
+        }
+
+        function formatTimeAgo(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const seconds = Math.floor((now - date) / 1000);
+
+            if (seconds < 60) return 'Just now';
+            if (seconds < 3600) return Math.floor(seconds / 60) + ' min ago';
+            if (seconds < 86400) return Math.floor(seconds / 3600) + ' hr ago';
+            if (seconds < 604800) return Math.floor(seconds / 86400) + ' days ago';
+
+            return date.toLocaleDateString();
         }
 
         function displayResults(basket) {
@@ -662,10 +724,33 @@
         }
 
         // Auto-load on page load
-        window.addEventListener('load', () => {
-            // Uncomment to auto-run on page load
-            // runScreener();
+        window.addEventListener('load', async () => {
+            // Load activity log on page load
+            await loadActivityLog();
+
+            // Optionally load latest portfolio
+            await loadLatestPortfolio();
         });
+
+        async function loadLatestPortfolio() {
+            try {
+                const response = await fetch('/api/portfolio/latest');
+                const data = await response.json();
+
+                if (data.success) {
+                    // Show existing portfolio without running screener
+                    displayResults({
+                        take_profit: data.data.take_profit,
+                        hold: data.data.hold,
+                        buffer: data.data.buffer,
+                        total_found: data.data.total_stocks
+                    });
+                }
+            } catch (err) {
+                // No previous portfolio, that's ok
+                console.log('No previous portfolio found');
+            }
+        }
     </script>
 </body>
 </html>

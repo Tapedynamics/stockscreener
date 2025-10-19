@@ -41,3 +41,8 @@ Thumbs.db
 # Debug files
 debug_html.py
 finviz_page.html
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
