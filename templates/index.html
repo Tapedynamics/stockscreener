@@ -1007,7 +1007,19 @@
                 if (data.success) {
                     // New API structure: data.data contains {basket, snapshot_id, performance}
                     const result = data.data;
-                    displayResults(result.basket || result.data, result.performance);
+                    console.log('Result object:', result);
+
+                    // Extract basket - handle both new and old structures
+                    const basket = result.basket || result.data || result;
+                    console.log('Basket object:', basket);
+
+                    if (!basket || !basket.take_profit) {
+                        console.error('Invalid basket structure:', basket);
+                        showError('Invalid data structure received from server');
+                        return;
+                    }
+
+                    displayResults(basket, result.performance || {});
                     await loadActivityLog();
                     await loadPortfolioStats();
                     console.log('Screener completed successfully');
@@ -1092,6 +1104,14 @@
         // ========================================
         function displayResults(basket, performance = {}) {
             console.log('Displaying portfolio results:', basket);
+
+            // Validate basket structure
+            if (!basket || typeof basket !== 'object') {
+                console.error('Invalid basket:', basket);
+                showError('Invalid portfolio data');
+                return;
+            }
+
             const takeProfitList = document.getElementById('takeProfitList');
             const holdList = document.getElementById('holdList');
             const bufferList = document.getElementById('bufferList');
@@ -1103,25 +1123,37 @@
             bufferList.innerHTML = '';
 
             // Update total positions
-            totalPositions.textContent = basket.total_found;
+            totalPositions.textContent = basket.total_found || 0;
 
-            // Take Profit
-            basket.take_profit.forEach((ticker, index) => {
-                const perf = performance[ticker]?.performance || null;
-                takeProfitList.innerHTML += createStockCard(ticker, index + 1, 'profit', perf);
-            });
+            // Take Profit - with safety check
+            if (Array.isArray(basket.take_profit)) {
+                basket.take_profit.forEach((ticker, index) => {
+                    const perf = performance[ticker]?.performance || null;
+                    takeProfitList.innerHTML += createStockCard(ticker, index + 1, 'profit', perf);
+                });
+            } else {
+                console.warn('take_profit is not an array:', basket.take_profit);
+            }
 
-            // Hold
-            basket.hold.forEach((ticker, index) => {
-                const perf = performance[ticker]?.performance || null;
-                holdList.innerHTML += createStockCard(ticker, index + 4, 'hold', perf);
-            });
+            // Hold - with safety check
+            if (Array.isArray(basket.hold)) {
+                basket.hold.forEach((ticker, index) => {
+                    const perf = performance[ticker]?.performance || null;
+                    holdList.innerHTML += createStockCard(ticker, index + 4, 'hold', perf);
+                });
+            } else {
+                console.warn('hold is not an array:', basket.hold);
+            }
 
-            // Buffer
-            basket.buffer.forEach((ticker, index) => {
-                const perf = performance[ticker]?.performance || null;
-                bufferList.innerHTML += createStockCard(ticker, index + 14, 'buffer', perf);
-            });
+            // Buffer - with safety check
+            if (Array.isArray(basket.buffer)) {
+                basket.buffer.forEach((ticker, index) => {
+                    const perf = performance[ticker]?.performance || null;
+                    bufferList.innerHTML += createStockCard(ticker, index + 14, 'buffer', perf);
+                });
+            } else {
+                console.warn('buffer is not an array:', basket.buffer);
+            }
         }
 
         function createStockCard(ticker, position, type, performance = null) {
