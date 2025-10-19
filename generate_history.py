@@ -244,7 +244,11 @@ def generate_historical_data():
     initial_value = 150000
     portfolio_value = initial_value
 
-    for week_key in sorted(HISTORICAL_STOCKS.keys()):
+    # Generate only historical data (exclude current week - week_42)
+    # Current week should be populated by real screener runs
+    historical_weeks = [k for k in sorted(HISTORICAL_STOCKS.keys()) if k != 'week_42']
+
+    for week_key in historical_weeks:
         portfolio = HISTORICAL_STOCKS[week_key]
 
         # Simulate weekly return (realistic range: -5% to +8%)
@@ -427,9 +431,9 @@ def generate_historical_data():
 if __name__ == '__main__':
     # Confirm before generating
     print("\nWARNING: This will populate the database with historical data")
-    print("   from January 6, 2025 to October 19, 2025 (42 weeks)")
+    print("   from January 6, 2025 to October 13, 2025 (41 weeks)")
     print("\nThis includes:")
-    print("  - 42 portfolio snapshots")
+    print("  - 41 portfolio snapshots (current week excluded - use real screener)")
     print("  - ~100+ activity log entries")
     print("  - Realistic stock rotations and rebalancing\n")
 
