@@ -481,8 +481,8 @@
             </div>
             <div class="stat-card">
                 <div class="stat-label">Next Rebalance</div>
-                <div class="stat-value">Monday</div>
-                <div class="stat-change neutral">19:00 CET</div>
+                <div class="stat-value" id="nextRebalanceDay">Monday</div>
+                <div class="stat-change neutral" id="nextRebalanceTime">19:00 CET</div>
             </div>
         </div>
 
@@ -730,7 +730,28 @@
 
             // Optionally load latest portfolio
             await loadLatestPortfolio();
+
+            // Load scheduler status
+            await loadSchedulerStatus();
         });
+
+        async function loadSchedulerStatus() {
+            try {
+                const response = await fetch('/api/scheduler/status');
+                const data = await response.json();
+
+                if (data.success && data.data.next_run) {
+                    const nextRun = new Date(data.data.next_run);
+                    const dayName = nextRun.toLocaleDateString('en-US', { weekday: 'long' });
+                    const time = nextRun.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
+
+                    document.getElementById('nextRebalanceDay').textContent = dayName;
+                    document.getElementById('nextRebalanceTime').textContent = time + ' CET';
+                }
+            } catch (err) {
+                console.log('Could not load scheduler status');
+            }
+        }
 
         async function loadLatestPortfolio() {
             try {

@@ -9,11 +9,16 @@ from bs4 import BeautifulSoup
 import re
 from datetime import datetime
 from database import get_db
+from scheduler import create_scheduler
+import atexit
 
 app = Flask(__name__)
 
 # URL del tuo screener Finviz
 FINVIZ_URL = "https://finviz.com/screener.ashx?v=141&f=cap_midover,fa_eps5years_pos,fa_estltgrowth_pos,fa_netmargin_pos,fa_opermargin_pos,fa_pe_u30,fa_roe_pos,geo_usa,sh_avgvol_o100,sh_curvol_o100,ta_sma200_pa&ft=4&o=-perf4w"
+
+# Global scheduler instance
+portfolio_scheduler = None
 
 
 def get_finviz_stocks(url):
@@ -69,6 +74,91 @@ def organize_basket(tickers):
     }
 
     return basket
+
+
+def automated_screener_job():
+    """
+    Automated screener job for scheduler
+    Returns dict with success status
+    """
+    try:
+        db = get_db()
+
+        # Run screener
+        tickers = get_finviz_stocks(FINVIZ_URL)
+
+        if not tickers:
+            return {
+                'success': False,
+                'error': 'No tickers found'
+            }
+
+        # Organize basket
+        top_15 = tickers[:15]
+        basket = organize_basket(top_15)
+
+        # Get previous portfolio
+        previous_portfolio = db.get_latest_portfolio()
+
+        # Save snapshot
+        snapshot_id = db.save_portfolio_snapshot(
+            basket['take_profit'],
+            basket['hold'],
+            basket['buffer'],
+            notes='Automated weekly rebalance'
+        )
+
+        # Compare and log changes
+        if previous_portfolio:
+            changes = db.compare_portfolios(basket, previous_portfolio)
+
+            if changes['added']:
+                db.add_activity_log(
+                    'BUY',
+                    f"🤖 AI Agent: Added {len(changes['added'])} new positions: {', '.join(changes['added'][:3])}{'...' if len(changes['added']) > 3 else ''}",
+                    metadata={'tickers': changes['added'], 'automated': True}
+                )
+
+            if changes['removed']:
+                db.add_activity_log(
+                    'SELL',
+                    f"🤖 AI Agent: Removed {len(changes['removed'])} positions: {', '.join(changes['removed'][:3])}{'...' if len(changes['removed']) > 3 else ''}",
+                    metadata={'tickers': changes['removed'], 'automated': True}
+                )
+
+            for move in changes['moved']:
+                db.add_activity_log(
+                    'REBALANCE',
+                    f"🤖 AI Agent: {move['ticker']} moved from {move['from']} to {move['to']}",
+                    ticker=move['ticker'],
+                    metadata={**move, 'automated': True}
+                )
+
+            if not changes['added'] and not changes['removed'] and not changes['moved']:
+                db.add_activity_log(
+                    'HOLD',
+                    '🤖 AI Agent: Automated rebalance - No changes needed, all positions maintained',
+                    metadata={'automated': True}
+                )
+
+        # Always log the automated scan
+        db.add_activity_log(
+            'SCAN',
+            f'🤖 AI Agent: Automated weekly scan completed - {basket["total_found"]} stocks identified',
+            metadata={'total': basket['total_found'], 'automated': True}
+        )
+
+        return {
+            'success': True,
+            'total_stocks': basket['total_found'],
+            'snapshot_id': snapshot_id
+        }
+
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e)
+        }
 
 
 @app.route('/')
@@ -235,11 +325,58 @@ def get_latest_portfolio():
         }), 500
 
 
+@app.route('/api/scheduler/status', methods=['GET'])
+def get_scheduler_status():
+    """Get scheduler status"""
+    try:
+        global portfolio_scheduler
+
+        if portfolio_scheduler:
+            status = portfolio_scheduler.get_status()
+            return jsonify({
+                'success': True,
+                'data': status
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Scheduler not initialized'
+            }), 500
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+def init_scheduler():
+    """Initialize the scheduler"""
+    global portfolio_scheduler
+
+    try:
+        portfolio_scheduler = create_scheduler(automated_screener_job)
+        print("✅ Automated scheduler initialized - Weekly rebalance at Monday 19:00 CET")
+
+        # Register shutdown handler
+        atexit.register(lambda: portfolio_scheduler.stop() if portfolio_scheduler else None)
+
+    except Exception as e:
+        print(f"❌ Failed to initialize scheduler: {e}")
+
+
 if __name__ == '__main__':
     print("\n" + "="*50)
-    print("Stock Screener Web App")
+    print("🤖 AI Portfolio Manager")
     print("="*50)
     print("\nServer in esecuzione su: http://localhost:5000")
+
+    # Initialize scheduler
+    init_scheduler()
+
     print("Premi CTRL+C per fermare il server\n")
 
     app.run(debug=True, host='0.0.0.0', port=5000)
+else:
+    # For production (Gunicorn)
+    init_scheduler()
