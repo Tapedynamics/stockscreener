@@ -706,12 +706,12 @@
 
         <!-- Navigation Tabs -->
         <div class="tabs-container">
-            <button class="tab-button active" onclick="switchTab('portfolio')">📊 Portfolio</button>
-            <button class="tab-button" onclick="switchTab('history')">📜 History</button>
-            <button class="tab-button" onclick="switchTab('charts')">📈 Charts</button>
-            <button class="tab-button" onclick="switchTab('compare')">⚖️ Compare</button>
-            <button class="tab-button" onclick="switchTab('benchmark')">📊 Benchmark</button>
-            <button class="tab-button" onclick="switchTab('settings')">⚙️ Settings</button>
+            <button class="tab-button active" onclick="switchTab(event, 'portfolio')">📊 Portfolio</button>
+            <button class="tab-button" onclick="switchTab(event, 'history')">📜 History</button>
+            <button class="tab-button" onclick="switchTab(event, 'charts')">📈 Charts</button>
+            <button class="tab-button" onclick="switchTab(event, 'compare')">⚖️ Compare</button>
+            <button class="tab-button" onclick="switchTab(event, 'benchmark')">📊 Benchmark</button>
+            <button class="tab-button" onclick="switchTab(event, 'settings')">⚙️ Settings</button>
         </div>
 
         <!-- Loading -->
@@ -811,11 +811,11 @@
                 <div class="chart-header">
                     <div class="chart-title">📈 Portfolio Performance (Simulated from Jan 1, 2025)</div>
                     <div class="timeframe-selector">
-                        <button class="timeframe-btn" onclick="loadChart('1M')">1M</button>
-                        <button class="timeframe-btn" onclick="loadChart('3M')">3M</button>
-                        <button class="timeframe-btn" onclick="loadChart('6M')">6M</button>
-                        <button class="timeframe-btn active" onclick="loadChart('YTD')">YTD</button>
-                        <button class="timeframe-btn" onclick="loadChart('ALL')">ALL</button>
+                        <button class="timeframe-btn" onclick="changeTimeframe('1M')">1M</button>
+                        <button class="timeframe-btn" onclick="changeTimeframe('3M')">3M</button>
+                        <button class="timeframe-btn" onclick="changeTimeframe('6M')">6M</button>
+                        <button class="timeframe-btn active" onclick="changeTimeframe('YTD')">YTD</button>
+                        <button class="timeframe-btn" onclick="changeTimeframe('ALL')">ALL</button>
                     </div>
                 </div>
 
@@ -973,37 +973,58 @@
     </div>
 
     <script>
+        // ========================================
+        // GLOBAL STATE
+        // ========================================
+        let portfolioChartInstance = null;
+        let currentTimeframe = 'YTD';
+
+        // ========================================
+        // SCREENER FUNCTIONALITY
+        // ========================================
         async function runScreener() {
+            console.log('Running screener...');
             const button = document.getElementById('runScreener');
             const loading = document.getElementById('loading');
             const error = document.getElementById('error');
 
-            // Reset
+            // Reset UI
             button.disabled = true;
+            button.textContent = 'Running...';
             loading.style.display = 'block';
             error.style.display = 'none';
 
             try {
                 const response = await fetch('/api/screener');
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
                 const data = await response.json();
+                console.log('Screener response:', data);
 
                 if (data.success) {
                     displayResults(data.data, data.performance);
-                    // Load activity log after screener runs
                     await loadActivityLog();
-                    // Load portfolio stats
                     await loadPortfolioStats();
+                    console.log('Screener completed successfully');
                 } else {
                     showError(data.error || 'Unknown error');
                 }
             } catch (err) {
+                console.error('Screener error:', err);
                 showError('Connection error: ' + err.message);
             } finally {
                 button.disabled = false;
+                button.textContent = 'Run Screener Now';
                 loading.style.display = 'none';
             }
         }
 
+        // ========================================
+        // ACTIVITY LOG
+        // ========================================
         async function loadActivityLog() {
             try {
                 const response = await fetch('/api/activity-log');
@@ -1064,7 +1085,11 @@
             return date.toLocaleDateString();
         }
 
+        // ========================================
+        // PORTFOLIO DISPLAY
+        // ========================================
         function displayResults(basket, performance = {}) {
+            console.log('Displaying portfolio results:', basket);
             const takeProfitList = document.getElementById('takeProfitList');
             const holdList = document.getElementById('holdList');
             const bufferList = document.getElementById('bufferList');
@@ -1164,19 +1189,33 @@
             error.style.display = 'block';
         }
 
-        // Auto-load on page load
+        // ========================================
+        // PAGE INITIALIZATION
+        // ========================================
         window.addEventListener('load', async () => {
-            // Load activity log on page load
-            await loadActivityLog();
+            console.log('Page loaded - Initializing application...');
 
-            // Optionally load latest portfolio
-            await loadLatestPortfolio();
+            try {
+                // Load activity log
+                console.log('Loading activity log...');
+                await loadActivityLog();
 
-            // Load scheduler status
-            await loadSchedulerStatus();
+                // Load latest portfolio
+                console.log('Loading latest portfolio...');
+                await loadLatestPortfolio();
 
-            // Load portfolio stats
-            await loadPortfolioStats();
+                // Load scheduler status
+                console.log('Loading scheduler status...');
+                await loadSchedulerStatus();
+
+                // Load portfolio stats
+                console.log('Loading portfolio stats...');
+                await loadPortfolioStats();
+
+                console.log('Application initialized successfully');
+            } catch (err) {
+                console.error('Initialization error:', err);
+            }
         });
 
         async function loadSchedulerStatus() {
@@ -1217,27 +1256,32 @@
             }
         }
 
-        // Chart.js instance
-        let portfolioChartInstance = null;
-        let currentTimeframe = 'YTD';
+        // ========================================
+        // TAB NAVIGATION
+        // ========================================
+        function switchTab(event, tabName) {
+            console.log('Switching to tab:', tabName);
 
-        // Tab switching
-        function switchTab(tabName) {
             // Hide all tabs
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
             });
 
-            // Remove active class from all buttons
+            // Remove active class from all tab buttons
             document.querySelectorAll('.tab-button').forEach(btn => {
                 btn.classList.remove('active');
             });
 
             // Show selected tab
-            document.getElementById(`tab-${tabName}`).classList.add('active');
+            const selectedTab = document.getElementById(`tab-${tabName}`);
+            if (selectedTab) {
+                selectedTab.classList.add('active');
+            }
 
             // Add active class to clicked button
-            event.target.classList.add('active');
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
 
             // Load data for specific tabs
             if (tabName === 'history') {
@@ -1249,8 +1293,11 @@
             }
         }
 
-        // Load portfolio history
+        // ========================================
+        // PORTFOLIO HISTORY
+        // ========================================
         async function loadPortfolioHistory() {
+            console.log('Loading portfolio history...');
             try {
                 const response = await fetch('/api/portfolio/history');
                 const data = await response.json();
@@ -1297,8 +1344,11 @@
             });
         }
 
-        // Export to CSV
+        // ========================================
+        // CSV EXPORT
+        // ========================================
         function exportCSV() {
+            console.log('Exporting portfolio to CSV...');
             fetch('/api/portfolio/latest')
                 .then(res => res.json())
                 .then(data => {
@@ -1333,8 +1383,11 @@
                 .catch(err => console.error('Export error:', err));
         }
 
-        // Settings Management
+        // ========================================
+        // SETTINGS MANAGEMENT
+        // ========================================
         async function loadSettings() {
+            console.log('Loading settings...');
             try {
                 const response = await fetch('/api/settings');
                 const data = await response.json();
@@ -1396,28 +1449,46 @@
             }
         }
 
-        // Load and display chart
+        // ========================================
+        // CHART FUNCTIONALITY
+        // ========================================
+        function changeTimeframe(timeframe) {
+            console.log('Changing timeframe to:', timeframe);
+            currentTimeframe = timeframe;
+
+            // Update active button
+            document.querySelectorAll('.timeframe-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.textContent === timeframe) {
+                    btn.classList.add('active');
+                }
+            });
+
+            // Load chart with new timeframe
+            loadChart(timeframe);
+        }
+
         async function loadChart(timeframe = 'YTD') {
+            console.log('Loading chart for timeframe:', timeframe);
+
             try {
                 currentTimeframe = timeframe;
 
-                // Update active button
-                document.querySelectorAll('.timeframe-btn').forEach(btn => {
-                    btn.classList.remove('active');
-                    if (btn.textContent === timeframe) {
-                        btn.classList.add('active');
-                    }
-                });
-
                 // Fetch chart data
                 const response = await fetch(`/api/portfolio/chart?timeframe=${timeframe}`);
-                const data = await response.json();
 
-                if (data.success) {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                console.log('Chart data received:', data);
+
+                if (data.success && data.data) {
                     renderChart(data.data);
                     updateChartStats(data.data);
                 } else {
-                    console.error('Error loading chart:', data.error);
+                    console.error('Error loading chart:', data.error || 'No data');
                 }
             } catch (err) {
                 console.error('Chart loading error:', err);
@@ -1425,11 +1496,32 @@
         }
 
         function renderChart(chartData) {
-            const ctx = document.getElementById('portfolioChart').getContext('2d');
+            console.log('Rendering chart with data:', chartData);
+
+            // Validate data
+            if (!chartData || !chartData.dates || !chartData.values) {
+                console.error('Invalid chart data:', chartData);
+                return;
+            }
+
+            if (chartData.dates.length === 0) {
+                console.warn('No data points to display');
+                return;
+            }
+
+            const canvas = document.getElementById('portfolioChart');
+            if (!canvas) {
+                console.error('Canvas element not found');
+                return;
+            }
+
+            const ctx = canvas.getContext('2d');
 
             // Destroy existing chart
             if (portfolioChartInstance) {
+                console.log('Destroying previous chart instance');
                 portfolioChartInstance.destroy();
+                portfolioChartInstance = null;
             }
 
             // Prepare data
@@ -1439,6 +1531,8 @@
             });
 
             const values = chartData.values;
+
+            console.log(`Rendering ${labels.length} data points`);
 
             // Create gradient
             const gradient = ctx.createLinearGradient(0, 0, 0, 400);
