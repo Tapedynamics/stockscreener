@@ -508,6 +508,50 @@
             background: rgba(102, 126, 234, 0.5);
             border-radius: 10px;
         }
+
+        /* Settings Panel */
+        .settings-section {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .setting-item {
+            margin-bottom: 20px;
+        }
+
+        .setting-label {
+            display: block;
+            color: #8b92a7;
+            font-size: 0.9em;
+            font-weight: 600;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .setting-input {
+            width: 100%;
+            max-width: 400px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #fff;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: all 0.3s ease;
+        }
+
+        .setting-input:focus {
+            outline: none;
+            border-color: #667eea;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .setting-input:hover {
+            border-color: rgba(102, 126, 234, 0.5);
+        }
     </style>
 </head>
 <body>
@@ -702,15 +746,98 @@
             </div>
         </div>
 
-        <!-- Tab Content: Settings (Placeholder) -->
+        <!-- Tab Content: Settings -->
         <div id="tab-settings" class="tab-content">
             <div class="activity-log">
                 <div class="log-header">
                     <div class="log-title">⚙️ Settings</div>
+                    <button class="btn-secondary" onclick="saveSettings()" style="padding: 10px 20px; font-size: 0.9em;">
+                        💾 Save Settings
+                    </button>
                 </div>
-                <div style="padding: 60px; text-align: center; color: #8b92a7;">
-                    <h3>Coming Soon</h3>
-                    <p>Configure rebalancing schedule and portfolio settings</p>
+
+                <div style="padding: 30px;">
+                    <!-- Scheduler Settings -->
+                    <div class="settings-section">
+                        <h3 style="color: #fff; margin-bottom: 20px; font-size: 1.2em;">🕐 Scheduler Configuration</h3>
+
+                        <div class="setting-item">
+                            <label class="setting-label">Rebalance Day</label>
+                            <select id="setting-day" class="setting-input">
+                                <option value="mon">Monday</option>
+                                <option value="tue">Tuesday</option>
+                                <option value="wed">Wednesday</option>
+                                <option value="thu">Thursday</option>
+                                <option value="fri">Friday</option>
+                                <option value="sat">Saturday</option>
+                                <option value="sun">Sunday</option>
+                            </select>
+                        </div>
+
+                        <div class="setting-item">
+                            <label class="setting-label">Rebalance Time (24h format)</label>
+                            <input type="time" id="setting-time" class="setting-input" value="19:00">
+                        </div>
+
+                        <div class="setting-item">
+                            <label class="setting-label">Timezone</label>
+                            <select id="setting-timezone" class="setting-input">
+                                <option value="Europe/Rome">Europe/Rome (CET)</option>
+                                <option value="America/New_York">America/New_York (EST)</option>
+                                <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
+                                <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
+                                <option value="UTC">UTC</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Portfolio Settings -->
+                    <div class="settings-section" style="margin-top: 40px;">
+                        <h3 style="color: #fff; margin-bottom: 20px; font-size: 1.2em;">📊 Portfolio Configuration</h3>
+
+                        <div class="setting-item">
+                            <label class="setting-label">Initial Portfolio Value ($)</label>
+                            <input type="number" id="setting-initial-value" class="setting-input" value="150000" step="1000">
+                        </div>
+
+                        <div class="setting-item">
+                            <label class="setting-label">Take Profit Positions</label>
+                            <input type="number" id="setting-take-profit-count" class="setting-input" value="3" min="1" max="10">
+                        </div>
+
+                        <div class="setting-item">
+                            <label class="setting-label">Hold Positions</label>
+                            <input type="number" id="setting-hold-count" class="setting-input" value="10" min="5" max="20">
+                        </div>
+
+                        <div class="setting-item">
+                            <label class="setting-label">Buffer Positions</label>
+                            <input type="number" id="setting-buffer-count" class="setting-input" value="2" min="1" max="5">
+                        </div>
+                    </div>
+
+                    <!-- Notification Settings -->
+                    <div class="settings-section" style="margin-top: 40px;">
+                        <h3 style="color: #fff; margin-bottom: 20px; font-size: 1.2em;">🔔 Notifications</h3>
+
+                        <div class="setting-item">
+                            <label class="setting-label">
+                                <input type="checkbox" id="setting-notify-rebalance" style="margin-right: 10px;">
+                                Notify on Rebalance
+                            </label>
+                        </div>
+
+                        <div class="setting-item">
+                            <label class="setting-label">
+                                <input type="checkbox" id="setting-notify-changes" style="margin-right: 10px;" checked>
+                                Notify on Portfolio Changes
+                            </label>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 30px; padding: 15px; background: rgba(102, 126, 234, 0.1); border-radius: 10px; color: #667eea;">
+                        <strong>Note:</strong> Some settings may require server restart to take effect. Changes to scheduler will be applied on next deployment.
+                    </div>
                 </div>
             </div>
         </div>
@@ -988,6 +1115,8 @@
             // Load data for specific tabs
             if (tabName === 'history') {
                 loadPortfolioHistory();
+            } else if (tabName === 'settings') {
+                loadSettings();
             }
         }
 
@@ -1073,6 +1202,69 @@
                     }
                 })
                 .catch(err => console.error('Export error:', err));
+        }
+
+        // Settings Management
+        async function loadSettings() {
+            try {
+                const response = await fetch('/api/settings');
+                const data = await response.json();
+
+                if (data.success) {
+                    const settings = data.data;
+
+                    // Scheduler settings
+                    if (settings.scheduler_day) document.getElementById('setting-day').value = settings.scheduler_day;
+                    if (settings.scheduler_time) document.getElementById('setting-time').value = settings.scheduler_time;
+                    if (settings.scheduler_timezone) document.getElementById('setting-timezone').value = settings.scheduler_timezone;
+
+                    // Portfolio settings
+                    if (settings.initial_value) document.getElementById('setting-initial-value').value = settings.initial_value;
+                    if (settings.take_profit_count) document.getElementById('setting-take-profit-count').value = settings.take_profit_count;
+                    if (settings.hold_count) document.getElementById('setting-hold-count').value = settings.hold_count;
+                    if (settings.buffer_count) document.getElementById('setting-buffer-count').value = settings.buffer_count;
+
+                    // Notification settings
+                    if (settings.notify_rebalance !== undefined) document.getElementById('setting-notify-rebalance').checked = settings.notify_rebalance === 'true';
+                    if (settings.notify_changes !== undefined) document.getElementById('setting-notify-changes').checked = settings.notify_changes === 'true';
+                }
+            } catch (err) {
+                console.error('Error loading settings:', err);
+            }
+        }
+
+        async function saveSettings() {
+            const settings = {
+                scheduler_day: document.getElementById('setting-day').value,
+                scheduler_time: document.getElementById('setting-time').value,
+                scheduler_timezone: document.getElementById('setting-timezone').value,
+                initial_value: document.getElementById('setting-initial-value').value,
+                take_profit_count: document.getElementById('setting-take-profit-count').value,
+                hold_count: document.getElementById('setting-hold-count').value,
+                buffer_count: document.getElementById('setting-buffer-count').value,
+                notify_rebalance: document.getElementById('setting-notify-rebalance').checked.toString(),
+                notify_changes: document.getElementById('setting-notify-changes').checked.toString()
+            };
+
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(settings)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('✅ Settings saved successfully!\n\nNote: Some changes may require server restart to take effect.');
+                } else {
+                    alert('❌ Error saving settings: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('❌ Error saving settings: ' + err.message);
+            }
         }
     </script>
 </body>

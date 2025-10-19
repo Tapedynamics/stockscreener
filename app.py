@@ -3,7 +3,7 @@
 Flask Web App per Stock Screener
 """
 
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 import requests
 from bs4 import BeautifulSoup
 import re
@@ -382,6 +382,72 @@ def get_portfolio_performance():
         return jsonify({
             'success': True,
             'data': stats
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/settings', methods=['GET'])
+def get_settings():
+    """Get all settings"""
+    try:
+        db = get_db()
+
+        # Default settings
+        default_settings = {
+            'scheduler_day': 'mon',
+            'scheduler_time': '19:00',
+            'scheduler_timezone': 'Europe/Rome',
+            'initial_value': '150000',
+            'take_profit_count': '3',
+            'hold_count': '10',
+            'buffer_count': '2',
+            'notify_rebalance': 'false',
+            'notify_changes': 'true'
+        }
+
+        # Get saved settings from database
+        settings = {}
+        for key in default_settings.keys():
+            value = db.get_setting(key, default_settings[key])
+            settings[key] = value
+
+        return jsonify({
+            'success': True,
+            'data': settings
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/settings', methods=['POST'])
+def save_settings():
+    """Save settings"""
+    try:
+        db = get_db()
+        data = request.get_json()
+
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No data provided'
+            }), 400
+
+        # Save each setting
+        for key, value in data.items():
+            db.set_setting(key, str(value))
+
+        return jsonify({
+            'success': True,
+            'message': 'Settings saved successfully'
         })
 
     except Exception as e:
