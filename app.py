@@ -537,11 +537,34 @@ def init_scheduler():
         logger.error(f"❌ Failed to initialize scheduler: {e}")
 
 
+def check_and_populate_history():
+    """Check if database is empty and populate with historical data"""
+    try:
+        db = get_db()
+        snapshots = db.get_portfolio_history(limit=5)
+
+        if len(snapshots) < 5:
+            logger.info("Database has few snapshots, generating historical data...")
+
+            # Import and run the generator
+            try:
+                from generate_history import generate_historical_data
+                generate_historical_data()
+                logger.info("Historical data generated successfully!")
+            except Exception as e:
+                logger.error(f"Error generating historical data: {e}")
+    except Exception as e:
+        logger.error(f"Error checking database: {e}")
+
+
 if __name__ == '__main__':
     logger.info("="*50)
-    logger.info("🤖 AI Portfolio Manager - Development Mode")
+    logger.info("AI Portfolio Manager - Development Mode")
     logger.info("="*50)
     logger.info("Server starting on: http://localhost:5000")
+
+    # Check and populate history if needed
+    check_and_populate_history()
 
     # Initialize scheduler in development
     init_scheduler()
@@ -551,6 +574,9 @@ if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
 else:
     # For production (Gunicorn)
+    # Check and populate history on startup
+    check_and_populate_history()
+
     # Only init scheduler if explicitly enabled or running single worker
     if os.getenv('ENABLE_SCHEDULER', 'true').lower() == 'true':
         init_scheduler()
