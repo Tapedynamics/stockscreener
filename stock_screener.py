@@ -7,9 +7,14 @@ Estrae i primi 15 stocks da un screener Finviz personalizzato
 import requests
 from bs4 import BeautifulSoup
 import sys
+import logging
+from typing import List, Dict, Optional
+from constants import HTTP_REQUEST_TIMEOUT, HTTP_HEADERS
+
+logger = logging.getLogger(__name__)
 
 
-def get_finviz_stocks(url):
+def get_finviz_stocks(url: str) -> List[str]:
     """
     Scarica e parsifica la pagina Finviz per estrarre i ticker
 
@@ -20,14 +25,15 @@ def get_finviz_stocks(url):
         list: Lista dei ticker symbols
     """
     try:
-        # Headers per simulare un browser normale
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-
-        # Richiesta HTTP
-        response = requests.get(url, headers=headers)
+        # Richiesta HTTP con timeout
+        response = requests.get(
+            url,
+            headers=HTTP_HEADERS,
+            timeout=HTTP_REQUEST_TIMEOUT
+        )
         response.raise_for_status()
+
+        logger.info(f"Successfully fetched data from Finviz")
 
         # Parsing HTML
         soup = BeautifulSoup(response.content, 'html.parser')
@@ -55,17 +61,21 @@ def get_finviz_stocks(url):
                         tickers.append(ticker)
                         seen.add(ticker)
 
+        logger.info(f"Found {len(tickers)} tickers from Finviz")
         return tickers
 
+    except requests.exceptions.Timeout:
+        logger.error(f"Request timeout after {HTTP_REQUEST_TIMEOUT} seconds")
+        return []
     except requests.exceptions.RequestException as e:
-        print(f"Errore nella richiesta HTTP: {e}")
+        logger.error(f"HTTP request error: {e}")
         return []
     except Exception as e:
-        print(f"Errore: {e}")
+        logger.error(f"Unexpected error: {e}")
         return []
 
 
-def organize_basket(tickers):
+def organize_basket(tickers: List[str]) -> Dict[str, any]:
     """
     Organizza i ticker in categorie
 
@@ -76,12 +86,13 @@ def organize_basket(tickers):
         dict: Dizionario con le categorie
     """
     if len(tickers) < 15:
-        print(f"Attenzione: Trovati solo {len(tickers)} ticker (servono almeno 15)")
+        logger.warning(f"Only {len(tickers)} tickers found (expected at least 15)")
 
     basket = {
         'take_profit': tickers[0:3],      # Top 3
         'hold': tickers[3:13],             # Posizioni 4-13 (10 stocks)
-        'buffer': tickers[13:15]           # Posizioni 14-15 (2 stocks)
+        'buffer': tickers[13:15],          # Posizioni 14-15 (2 stocks)
+        'total_found': len(tickers)
     }
 
     return basket

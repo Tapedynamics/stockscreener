@@ -7,6 +7,7 @@ import yfinance as yf
 from datetime import datetime, timedelta
 from database import get_db
 import logging
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ class PriceTracker:
 
         return prices
 
-    def save_price(self, ticker, price):
+    def save_price(self, ticker: str, price: float) -> None:
         """
         Save stock price to database
 
@@ -84,19 +85,22 @@ class PriceTracker:
             ticker: Stock ticker symbol
             price: Current price
         """
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
-
         today = datetime.now().date()
+        self.db.batch_save_prices([(ticker, today.isoformat(), price)])
 
-        cursor.execute('''
-            INSERT OR REPLACE INTO stock_performance
-            (ticker, date, price, performance)
-            VALUES (?, ?, ?, NULL)
-        ''', (ticker, today, price))
+    def save_prices_batch(self, price_data: Dict[str, float]) -> None:
+        """
+        Save multiple prices at once using batch operation
 
-        conn.commit()
-        conn.close()
+        Args:
+            price_data: Dictionary of {ticker: price}
+        """
+        today = datetime.now().date().isoformat()
+        batch = [(ticker, today, price) for ticker, price in price_data.items() if price is not None]
+
+        if batch:
+            self.db.batch_save_prices(batch)
+            logger.info(f"Batch saved {len(batch)} stock prices")
 
     def calculate_performance(self, ticker, days=7):
         """
@@ -134,7 +138,7 @@ class PriceTracker:
 
         return None
 
-    def update_portfolio_prices(self, portfolio):
+    def update_portfolio_prices(self, portfolio: Dict) -> Dict[str, Dict]:
         """
         Update prices for all stocks in portfolio
 
@@ -151,21 +155,23 @@ class PriceTracker:
         )
 
         if not all_tickers:
+            logger.warning("No tickers in portfolio to update")
             return {}
 
         # Get current prices
+        logger.info(f"Fetching prices for {len(all_tickers)} tickers")
         prices = self.get_prices_batch(all_tickers)
 
-        # Save to database and calculate performance
+        # Batch save all prices
+        self.save_prices_batch(prices)
+
+        # Calculate performance for each ticker
         results = {}
 
         for ticker in all_tickers:
             price = prices.get(ticker)
 
             if price:
-                # Save price
-                self.save_price(ticker, price)
-
                 # Calculate performance (7 days)
                 perf = self.calculate_performance(ticker, days=7)
 
@@ -174,11 +180,13 @@ class PriceTracker:
                     'performance': perf if perf is not None else 0.0
                 }
             else:
+                logger.warning(f"No price data for {ticker}")
                 results[ticker] = {
                     'price': None,
                     'performance': 0.0
                 }
 
+        logger.info(f"Updated prices for {len(results)} stocks")
         return results
 
     def get_portfolio_stats(self, portfolio, initial_value=150000):

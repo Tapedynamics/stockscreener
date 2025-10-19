@@ -7,16 +7,28 @@ import sqlite3
 from datetime import datetime
 import json
 import os
+import logging
+from typing import List, Dict, Optional, Tuple, Any
+
+logger = logging.getLogger(__name__)
 
 
 class Database:
-    def __init__(self, db_path='portfolio.db'):
-        """Initialize database connection"""
+    def __init__(self, db_path: str = 'portfolio.db'):
+        """Initialize database connection
+
+        Args:
+            db_path: Path to SQLite database file
+        """
         self.db_path = db_path
         self.init_db()
 
-    def get_connection(self):
-        """Get database connection"""
+    def get_connection(self) -> sqlite3.Connection:
+        """Get database connection
+
+        Returns:
+            SQLite connection with Row factory
+        """
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
@@ -72,8 +84,30 @@ class Database:
             )
         ''')
 
+        # Create indexes for performance
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_portfolio_timestamp
+            ON portfolio_snapshots(timestamp DESC)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_activity_timestamp
+            ON activity_log(timestamp DESC)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_stock_ticker_date
+            ON stock_performance(ticker, date DESC)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_activity_action_type
+            ON activity_log(action_type, timestamp DESC)
+        ''')
+
         conn.commit()
         conn.close()
+        logger.info("Database initialized successfully")
 
     def save_portfolio_snapshot(self, take_profit, hold, buffer, notes=None):
         """Save a portfolio snapshot"""
@@ -258,8 +292,13 @@ class Database:
             return row['value']
         return default
 
-    def set_setting(self, key, value):
-        """Set a setting value"""
+    def set_setting(self, key: str, value: str) -> None:
+        """Set a setting value
+
+        Args:
+            key: Setting key
+            value: Setting value
+        """
         conn = self.get_connection()
         cursor = conn.cursor()
 
@@ -271,8 +310,65 @@ class Database:
         conn.commit()
         conn.close()
 
+    def batch_save_prices(self, price_data: List[Tuple[str, str, float]]) -> None:
+        """Batch save multiple stock prices
+
+        Args:
+            price_data: List of tuples (ticker, date, price)
+        """
+        if not price_data:
+            return
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.executemany('''
+                INSERT OR REPLACE INTO stock_performance
+                (ticker, date, price, performance)
+                VALUES (?, ?, ?, NULL)
+            ''', price_data)
+
+            conn.commit()
+            logger.info(f"Batch saved {len(price_data)} price records")
+        except Exception as e:
+            logger.error(f"Error in batch save: {e}")
+            conn.rollback()
+        finally:
+            conn.close()
+
+    def get_recent_prices(self, ticker: str, days: int = 30) -> List[Dict[str, Any]]:
+        """Get recent prices for a ticker
+
+        Args:
+            ticker: Stock ticker symbol
+            days: Number of days to retrieve
+
+        Returns:
+            List of price records
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT ticker, date, price, performance
+            FROM stock_performance
+            WHERE ticker = ?
+            ORDER BY date DESC
+            LIMIT ?
+        ''', (ticker, days))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
 
 # Convenience function
-def get_db():
-    """Get database instance"""
+def get_db() -> Database:
+    """Get database instance
+
+    Returns:
+        Database instance
+    """
     return Database()

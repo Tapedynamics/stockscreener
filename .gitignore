@@ -46,3 +46,15 @@ finviz_page.html
 *.db
 *.sqlite
 *.sqlite3
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+*.log
+logs/
+
+# Cache
+.cache/
+*.cache

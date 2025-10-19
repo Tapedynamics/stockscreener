@@ -7,33 +7,66 @@ from flask import Flask, render_template, jsonify, request
 import requests
 from bs4 import BeautifulSoup
 import re
+import os
+import logging
 from datetime import datetime
+from typing import Dict, Any, Tuple
 from database import get_db
 from scheduler import create_scheduler
 from price_tracker import get_price_tracker
 from portfolio_simulator import get_simulator
+from utils import api_response, api_error, api_success, validate_settings
+from constants import (
+    HTTP_REQUEST_TIMEOUT,
+    HTTP_HEADERS,
+    DEFAULT_INITIAL_VALUE,
+    LOG_FORMAT,
+    LOG_LEVEL
+)
 import atexit
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    level=getattr(logging, os.getenv('LOG_LEVEL', LOG_LEVEL)),
+    format=os.getenv('LOG_FORMAT', LOG_FORMAT)
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 
-# URL del tuo screener Finviz
-FINVIZ_URL = "https://finviz.com/screener.ashx?v=141&f=cap_midover,fa_eps5years_pos,fa_estltgrowth_pos,fa_netmargin_pos,fa_opermargin_pos,fa_pe_u30,fa_roe_pos,geo_usa,sh_avgvol_o100,sh_curvol_o100,ta_sma200_pa&ft=4&o=-perf4w"
+# URL del tuo screener Finviz (from environment or default)
+FINVIZ_URL = os.getenv(
+    'FINVIZ_URL',
+    "https://finviz.com/screener.ashx?v=141&f=cap_midover,fa_eps5years_pos,fa_estltgrowth_pos,fa_netmargin_pos,fa_opermargin_pos,fa_pe_u30,fa_roe_pos,geo_usa,sh_avgvol_o100,sh_curvol_o100,ta_sma200_pa&ft=4&o=-perf4w"
+)
 
 # Global scheduler instance
 portfolio_scheduler = None
 
 
-def get_finviz_stocks(url):
+def get_finviz_stocks(url: str) -> list:
     """
     Scarica e parsifica la pagina Finviz per estrarre i ticker
+
+    Args:
+        url: URL del screener Finviz
+
+    Returns:
+        Lista dei ticker symbols
     """
     try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-
-        response = requests.get(url, headers=headers)
+        response = requests.get(
+            url,
+            headers=HTTP_HEADERS,
+            timeout=HTTP_REQUEST_TIMEOUT
+        )
         response.raise_for_status()
+        logger.info("Successfully fetched Finviz data")
 
         soup = BeautifulSoup(response.content, 'html.parser')
 
@@ -57,17 +90,33 @@ def get_finviz_stocks(url):
                         tickers.append(ticker)
                         seen.add(ticker)
 
+        logger.info(f"Extracted {len(tickers)} tickers")
         return tickers
 
+    except requests.exceptions.Timeout:
+        logger.error(f"Request timeout after {HTTP_REQUEST_TIMEOUT} seconds")
+        return []
+    except requests.exceptions.RequestException as e:
+        logger.error(f"HTTP request error: {e}")
+        return []
     except Exception as e:
-        print(f"Errore: {e}")
+        logger.error(f"Unexpected error in get_finviz_stocks: {e}")
         return []
 
 
-def organize_basket(tickers):
+def organize_basket(tickers: list) -> dict:
     """
     Organizza i ticker in categorie
+
+    Args:
+        tickers: Lista di ticker symbols
+
+    Returns:
+        Dizionario con categorie portfolio
     """
+    if len(tickers) < 15:
+        logger.warning(f"Only {len(tickers)} tickers found, expected at least 15")
+
     basket = {
         'take_profit': tickers[0:3],
         'hold': tickers[3:13],
@@ -172,6 +221,8 @@ def index():
 @app.route('/api/screener', methods=['GET'])
 def run_screener():
     """API endpoint per eseguire lo screener"""
+    logger.info("Running screener manually...")
+
     try:
         db = get_db()
 
@@ -179,10 +230,8 @@ def run_screener():
         tickers = get_finviz_stocks(FINVIZ_URL)
 
         if not tickers:
-            return jsonify({
-                'success': False,
-                'error': 'Nessun ticker trovato'
-            }), 500
+            logger.error("No tickers found from screener")
+            return api_error('Nessun ticker trovato', 500)
 
         # Prendi i primi 15
         top_15 = tickers[:15]
@@ -255,18 +304,17 @@ def run_screener():
         tracker = get_price_tracker()
         stock_performance = tracker.update_portfolio_prices(basket)
 
-        return jsonify({
-            'success': True,
+        logger.info(f"Screener completed successfully - {basket['total_found']} stocks found")
+
+        return api_success({
             'data': basket,
             'snapshot_id': snapshot_id,
             'performance': stock_performance
         })
 
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        logger.error(f"Error in run_screener: {e}", exc_info=True)
+        return api_error(str(e), 500)
 
 
 @app.route('/api/activity-log', methods=['GET'])
@@ -431,31 +479,39 @@ def get_settings():
 
 @app.route('/api/settings', methods=['POST'])
 def save_settings():
-    """Save settings"""
+    """Save settings with validation"""
+    logger.info("Saving settings...")
+
     try:
         db = get_db()
         data = request.get_json()
 
         if not data:
-            return jsonify({
-                'success': False,
-                'error': 'No data provided'
-            }), 400
+            logger.warning("No data provided in settings request")
+            return api_error('No data provided', 400)
 
-        # Save each setting
-        for key, value in data.items():
+        # Validate all settings
+        is_valid, error_msg, sanitized_data = validate_settings(data)
+
+        if not is_valid:
+            logger.warning(f"Settings validation failed: {error_msg}")
+            return api_error(f'Validation error: {error_msg}', 400)
+
+        # Save each validated setting
+        for key, value in sanitized_data.items():
             db.set_setting(key, str(value))
+            logger.debug(f"Saved setting: {key} = {value}")
 
-        return jsonify({
-            'success': True,
-            'message': 'Settings saved successfully'
+        logger.info(f"Successfully saved {len(sanitized_data)} settings")
+
+        return api_success({
+            'message': 'Settings saved successfully',
+            'count': len(sanitized_data)
         })
 
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        logger.error(f"Error saving settings: {e}", exc_info=True)
+        return api_error(str(e), 500)
 
 
 @app.route('/api/portfolio/chart', methods=['GET'])
@@ -503,32 +559,45 @@ def get_portfolio_chart():
 
 
 def init_scheduler():
-    """Initialize the scheduler"""
+    """Initialize the scheduler (only in main worker)"""
     global portfolio_scheduler
+
+    # Only initialize scheduler in development or in single-worker production
+    # In Gunicorn with multiple workers, scheduler should run separately
+    worker_id = os.getenv('WORKER_ID', '0')
+    is_main_worker = worker_id == '0'
+
+    if not is_main_worker and os.getenv('GUNICORN_WORKERS'):
+        logger.info(f"Skipping scheduler init - Worker {worker_id} (non-main)")
+        return
 
     try:
         portfolio_scheduler = create_scheduler(automated_screener_job)
-        print("✅ Automated scheduler initialized - Weekly rebalance at Monday 19:00 CET")
+        logger.info("✅ Automated scheduler initialized - Weekly rebalance at Monday 19:00 CET")
 
         # Register shutdown handler
         atexit.register(lambda: portfolio_scheduler.stop() if portfolio_scheduler else None)
 
     except Exception as e:
-        print(f"❌ Failed to initialize scheduler: {e}")
+        logger.error(f"❌ Failed to initialize scheduler: {e}")
 
 
 if __name__ == '__main__':
-    print("\n" + "="*50)
-    print("🤖 AI Portfolio Manager")
-    print("="*50)
-    print("\nServer in esecuzione su: http://localhost:5000")
+    logger.info("="*50)
+    logger.info("🤖 AI Portfolio Manager - Development Mode")
+    logger.info("="*50)
+    logger.info("Server starting on: http://localhost:5000")
 
-    # Initialize scheduler
+    # Initialize scheduler in development
     init_scheduler()
 
-    print("Premi CTRL+C per fermare il server\n")
+    logger.info("Press CTRL+C to stop the server")
 
     app.run(debug=True, host='0.0.0.0', port=5000)
 else:
     # For production (Gunicorn)
-    init_scheduler()
+    # Only init scheduler if explicitly enabled or running single worker
+    if os.getenv('ENABLE_SCHEDULER', 'true').lower() == 'true':
+        init_scheduler()
+    else:
+        logger.info("Scheduler disabled in production (set ENABLE_SCHEDULER=true to enable)")
