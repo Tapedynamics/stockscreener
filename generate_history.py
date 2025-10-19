@@ -240,29 +240,45 @@ def generate_historical_data():
     current_date = start_date
     previous_portfolio = None
 
+    # Simulate portfolio performance
+    initial_value = 150000
+    portfolio_value = initial_value
+
     for week_key in sorted(HISTORICAL_STOCKS.keys()):
         portfolio = HISTORICAL_STOCKS[week_key]
 
+        # Simulate weekly return (realistic range: -5% to +8%)
+        # Higher probability of positive weeks (tech bull market 2025)
+        weekly_return = random.uniform(-0.05, 0.08)
+
+        # Apply some bias toward positive returns (65% probability)
+        if random.random() < 0.65:
+            weekly_return = abs(weekly_return)  # Force positive
+
+        portfolio_value = portfolio_value * (1 + weekly_return)
+
         print(f"\nWeek {week_num} - {current_date.strftime('%B %d, %Y')}")
+        print(f"   Portfolio Value: ${portfolio_value:,.2f} ({weekly_return*100:+.2f}%)")
         print(f"   Take Profit: {', '.join(portfolio['take_profit'])}")
         print(f"   Hold: {', '.join(portfolio['hold'][:5])}... ({len(portfolio['hold'])} total)")
         print(f"   Buffer: {', '.join(portfolio['buffer'])}")
 
-        # Save portfolio snapshot with backdated timestamp
+        # Save portfolio snapshot with backdated timestamp and value
         conn = db.get_connection()
         cursor = conn.cursor()
 
         cursor.execute('''
             INSERT INTO portfolio_snapshots
-            (timestamp, take_profit, hold, buffer, total_stocks, notes)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (timestamp, take_profit, hold, buffer, total_stocks, portfolio_value, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (
             current_date.isoformat(),
             json.dumps(portfolio['take_profit']),
             json.dumps(portfolio['hold']),
             json.dumps(portfolio['buffer']),
             len(portfolio['take_profit']) + len(portfolio['hold']) + len(portfolio['buffer']),
-            f'AI Agent weekly rebalance - Week {week_num}'
+            round(portfolio_value, 2),
+            f'AI Agent weekly rebalance - Week {week_num} - Return: {weekly_return*100:+.2f}%'
         ))
 
         snapshot_id = cursor.lastrowid

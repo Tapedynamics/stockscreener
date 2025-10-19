@@ -47,9 +47,17 @@ class Database:
                 hold TEXT NOT NULL,
                 buffer TEXT NOT NULL,
                 total_stocks INTEGER,
+                portfolio_value REAL,
                 notes TEXT
             )
         ''')
+
+        # Add portfolio_value column if it doesn't exist (migration)
+        try:
+            cursor.execute('ALTER TABLE portfolio_snapshots ADD COLUMN portfolio_value REAL')
+            logger.info("Added portfolio_value column to portfolio_snapshots")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
         # Activity log table
         cursor.execute('''
@@ -109,20 +117,21 @@ class Database:
         conn.close()
         logger.info("Database initialized successfully")
 
-    def save_portfolio_snapshot(self, take_profit, hold, buffer, notes=None):
+    def save_portfolio_snapshot(self, take_profit, hold, buffer, notes=None, portfolio_value=None):
         """Save a portfolio snapshot"""
         conn = self.get_connection()
         cursor = conn.cursor()
 
         cursor.execute('''
             INSERT INTO portfolio_snapshots
-            (take_profit, hold, buffer, total_stocks, notes)
-            VALUES (?, ?, ?, ?, ?)
+            (take_profit, hold, buffer, total_stocks, portfolio_value, notes)
+            VALUES (?, ?, ?, ?, ?, ?)
         ''', (
             json.dumps(take_profit),
             json.dumps(hold),
             json.dumps(buffer),
             len(take_profit) + len(hold) + len(buffer),
+            portfolio_value,
             notes
         ))
 

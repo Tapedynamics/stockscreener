@@ -546,6 +546,7 @@ def get_portfolio_chart():
         # Reverse to get chronological order (oldest first)
         history_sorted = sorted(history, key=lambda x: x['timestamp'])
 
+        portfolio_values = []
         for snapshot in history_sorted:
             # Parse timestamp
             timestamp = snapshot['timestamp']
@@ -563,12 +564,14 @@ def get_portfolio_chart():
             labels.append(label)
             portfolio_counts.append(snapshot['total_stocks'])
 
-        # Calculate portfolio value based on position count (simplified)
-        # In reality you'd use actual stock prices
-        initial_value = float(db.get_setting('initial_value', '150000'))
-        value_per_position = initial_value / 15  # Average per stock
-
-        portfolio_values = [count * value_per_position for count in portfolio_counts]
+            # Use portfolio_value from database if available, otherwise calculate
+            if snapshot.get('portfolio_value'):
+                portfolio_values.append(float(snapshot['portfolio_value']))
+            else:
+                # Fallback calculation for old data without portfolio_value
+                initial_value = float(db.get_setting('initial_value', '150000'))
+                value_per_position = initial_value / 15
+                portfolio_values.append(snapshot['total_stocks'] * value_per_position)
 
         chart_data = {
             'labels': labels,
