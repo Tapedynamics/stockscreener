@@ -10,6 +10,7 @@ import re
 from datetime import datetime
 from database import get_db
 from scheduler import create_scheduler
+from price_tracker import get_price_tracker
 import atexit
 
 app = Flask(__name__)
@@ -249,10 +250,15 @@ def run_screener():
             metadata={'total': basket['total_found']}
         )
 
+        # Get performance data for stocks
+        tracker = get_price_tracker()
+        stock_performance = tracker.update_portfolio_prices(basket)
+
         return jsonify({
             'success': True,
             'data': basket,
-            'snapshot_id': snapshot_id
+            'snapshot_id': snapshot_id,
+            'performance': stock_performance
         })
 
     except Exception as e:
@@ -342,6 +348,41 @@ def get_scheduler_status():
                 'success': False,
                 'error': 'Scheduler not initialized'
             }), 500
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/portfolio/performance', methods=['GET'])
+def get_portfolio_performance():
+    """Get portfolio performance with real prices"""
+    try:
+        db = get_db()
+        tracker = get_price_tracker()
+
+        # Get latest portfolio
+        portfolio = db.get_latest_portfolio()
+
+        if not portfolio:
+            return jsonify({
+                'success': False,
+                'error': 'No portfolio found'
+            }), 404
+
+        # Calculate stats with real prices
+        stats = tracker.get_portfolio_stats({
+            'take_profit': portfolio['take_profit'],
+            'hold': portfolio['hold'],
+            'buffer': portfolio['buffer']
+        })
+
+        return jsonify({
+            'success': True,
+            'data': stats
+        })
 
     except Exception as e:
         return jsonify({

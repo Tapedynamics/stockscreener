@@ -589,9 +589,11 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    displayResults(data.data);
+                    displayResults(data.data, data.performance);
                     // Load activity log after screener runs
                     await loadActivityLog();
+                    // Load portfolio stats
+                    await loadPortfolioStats();
                 } else {
                     showError(data.error || 'Unknown error');
                 }
@@ -663,7 +665,7 @@
             return date.toLocaleDateString();
         }
 
-        function displayResults(basket) {
+        function displayResults(basket, performance = {}) {
             const results = document.getElementById('results');
             const takeProfitList = document.getElementById('takeProfitList');
             const holdList = document.getElementById('holdList');
@@ -680,33 +682,42 @@
 
             // Take Profit
             basket.take_profit.forEach((ticker, index) => {
-                takeProfitList.innerHTML += createStockCard(ticker, index + 1, 'profit');
+                const perf = performance[ticker]?.performance || null;
+                takeProfitList.innerHTML += createStockCard(ticker, index + 1, 'profit', perf);
             });
 
             // Hold
             basket.hold.forEach((ticker, index) => {
-                holdList.innerHTML += createStockCard(ticker, index + 4, 'hold');
+                const perf = performance[ticker]?.performance || null;
+                holdList.innerHTML += createStockCard(ticker, index + 4, 'hold', perf);
             });
 
             // Buffer
             basket.buffer.forEach((ticker, index) => {
-                bufferList.innerHTML += createStockCard(ticker, index + 14, 'buffer');
+                const perf = performance[ticker]?.performance || null;
+                bufferList.innerHTML += createStockCard(ticker, index + 14, 'buffer', perf);
             });
 
             results.style.display = 'block';
         }
 
-        function createStockCard(ticker, position, type) {
-            // Simulated performance for demo
-            const perf = (Math.random() * 10 - 2).toFixed(2);
-            const perfClass = perf > 0 ? 'positive' : perf < 0 ? 'negative' : 'neutral';
-            const perfSign = perf > 0 ? '+' : '';
+        function createStockCard(ticker, position, type, performance = null) {
+            // Use real performance or show loading
+            let perfDisplay = '';
+            if (performance !== null) {
+                const perf = parseFloat(performance).toFixed(2);
+                const perfClass = perf > 0 ? 'positive' : perf < 0 ? 'negative' : 'neutral';
+                const perfSign = perf > 0 ? '+' : '';
+                perfDisplay = `<div class="stock-performance ${perfClass}">${perfSign}${perf}%</div>`;
+            } else {
+                perfDisplay = `<div class="stock-performance neutral">--</div>`;
+            }
 
             return `
                 <div class="stock-card">
                     <div class="stock-header">
                         <div class="stock-ticker">${ticker}</div>
-                        <div class="stock-performance ${perfClass}">${perfSign}${perf}%</div>
+                        ${perfDisplay}
                     </div>
                     <div class="stock-meta">
                         <span>Position #${position}</span>
@@ -715,6 +726,40 @@
                     </div>
                 </div>
             `;
+        }
+
+        async function loadPortfolioStats() {
+            try {
+                const response = await fetch('/api/portfolio/performance');
+                const data = await response.json();
+
+                if (data.success) {
+                    updateStatsDisplay(data.data);
+                }
+            } catch (err) {
+                console.error('Error loading portfolio stats:', err);
+            }
+        }
+
+        function updateStatsDisplay(stats) {
+            // Update portfolio value
+            const valueElem = document.querySelector('.stat-card:nth-child(1) .stat-value');
+            if (valueElem) {
+                valueElem.textContent = `$${stats.total_value.toLocaleString()}`;
+            }
+
+            // Update weekly performance
+            const perfElem = document.querySelector('.stat-card:nth-child(3) .stat-value');
+            const gainElem = document.querySelector('.stat-card:nth-child(3) .stat-change');
+            if (perfElem && gainElem) {
+                const perfClass = stats.weekly_performance > 0 ? 'positive' : stats.weekly_performance < 0 ? 'negative' : 'neutral';
+                const perfSign = stats.weekly_performance > 0 ? '+' : '';
+                const gainSign = stats.weekly_gain > 0 ? '+' : '';
+
+                perfElem.textContent = `${perfSign}${stats.weekly_performance}%`;
+                gainElem.textContent = `${gainSign}$${Math.abs(stats.weekly_gain).toLocaleString()}`;
+                gainElem.className = `stat-change ${perfClass}`;
+            }
         }
 
         function showError(message) {
@@ -733,6 +778,9 @@
 
             // Load scheduler status
             await loadSchedulerStatus();
+
+            // Load portfolio stats
+            await loadPortfolioStats();
         });
 
         async function loadSchedulerStatus() {
