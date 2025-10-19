@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Portfolio Manager - Stock Screener</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -552,6 +553,103 @@
         .setting-input:hover {
             border-color: rgba(102, 126, 234, 0.5);
         }
+
+        /* Chart Styles */
+        .chart-container {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            margin-bottom: 30px;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .chart-title {
+            font-size: 1.2em;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .timeframe-selector {
+            display: flex;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 5px;
+            border-radius: 8px;
+        }
+
+        .timeframe-btn {
+            background: transparent;
+            border: none;
+            color: #8b92a7;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .timeframe-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #667eea;
+        }
+
+        .timeframe-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .chart-canvas {
+            position: relative;
+            height: 400px;
+        }
+
+        .chart-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .chart-stat {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .chart-stat-label {
+            font-size: 0.85em;
+            color: #8b92a7;
+            margin-bottom: 5px;
+        }
+
+        .chart-stat-value {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        @media (max-width: 768px) {
+            .chart-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .timeframe-selector {
+                width: 100%;
+                overflow-x: auto;
+            }
+        }
     </style>
 </head>
 <body>
@@ -707,16 +805,46 @@
             </div>
         </div>
 
-        <!-- Tab Content: Charts (Placeholder) -->
+        <!-- Tab Content: Charts -->
         <div id="tab-charts" class="tab-content">
-            <div class="activity-log">
-                <div class="log-header">
-                    <div class="log-title">📈 Performance Charts</div>
+            <div class="chart-container">
+                <div class="chart-header">
+                    <div class="chart-title">📈 Portfolio Performance (Simulated from Jan 1, 2025)</div>
+                    <div class="timeframe-selector">
+                        <button class="timeframe-btn" onclick="loadChart('1M')">1M</button>
+                        <button class="timeframe-btn" onclick="loadChart('3M')">3M</button>
+                        <button class="timeframe-btn" onclick="loadChart('6M')">6M</button>
+                        <button class="timeframe-btn active" onclick="loadChart('YTD')">YTD</button>
+                        <button class="timeframe-btn" onclick="loadChart('ALL')">ALL</button>
+                    </div>
                 </div>
-                <div style="padding: 60px; text-align: center; color: #8b92a7;">
-                    <h3>Coming Soon</h3>
-                    <p>Performance charts and visualizations will be available here</p>
+
+                <div class="chart-canvas">
+                    <canvas id="portfolioChart"></canvas>
                 </div>
+
+                <div class="chart-stats">
+                    <div class="chart-stat">
+                        <div class="chart-stat-label">Initial Value</div>
+                        <div class="chart-stat-value" id="chart-initial-value">$150,000</div>
+                    </div>
+                    <div class="chart-stat">
+                        <div class="chart-stat-label">Current Value</div>
+                        <div class="chart-stat-value" id="chart-current-value">$150,000</div>
+                    </div>
+                    <div class="chart-stat">
+                        <div class="chart-stat-label">Total Return</div>
+                        <div class="chart-stat-value" id="chart-total-return" style="color: #10b981;">+0.00%</div>
+                    </div>
+                    <div class="chart-stat">
+                        <div class="chart-stat-label">Days Tracked</div>
+                        <div class="chart-stat-value" id="chart-days-tracked">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="padding: 20px; background: rgba(102, 126, 234, 0.1); border-radius: 10px; border: 1px solid rgba(102, 126, 234, 0.3); color: #667eea;">
+                <strong>ℹ️ Simulation Note:</strong> This chart simulates how your current portfolio would have performed if you had started with it on January 1, 2025. It uses real historical price data from Yahoo Finance to calculate daily portfolio values based on equal-weight distribution.
             </div>
         </div>
 
@@ -848,13 +976,11 @@
         async function runScreener() {
             const button = document.getElementById('runScreener');
             const loading = document.getElementById('loading');
-            const results = document.getElementById('results');
             const error = document.getElementById('error');
 
             // Reset
             button.disabled = true;
             loading.style.display = 'block';
-            results.style.display = 'none';
             error.style.display = 'none';
 
             try {
@@ -939,7 +1065,6 @@
         }
 
         function displayResults(basket, performance = {}) {
-            const results = document.getElementById('results');
             const takeProfitList = document.getElementById('takeProfitList');
             const holdList = document.getElementById('holdList');
             const bufferList = document.getElementById('bufferList');
@@ -970,8 +1095,6 @@
                 const perf = performance[ticker]?.performance || null;
                 bufferList.innerHTML += createStockCard(ticker, index + 14, 'buffer', perf);
             });
-
-            results.style.display = 'block';
         }
 
         function createStockCard(ticker, position, type, performance = null) {
@@ -1094,6 +1217,10 @@
             }
         }
 
+        // Chart.js instance
+        let portfolioChartInstance = null;
+        let currentTimeframe = 'YTD';
+
         // Tab switching
         function switchTab(tabName) {
             // Hide all tabs
@@ -1117,6 +1244,8 @@
                 loadPortfolioHistory();
             } else if (tabName === 'settings') {
                 loadSettings();
+            } else if (tabName === 'charts') {
+                loadChart(currentTimeframe);
             }
         }
 
@@ -1265,6 +1394,152 @@
             } catch (err) {
                 alert('❌ Error saving settings: ' + err.message);
             }
+        }
+
+        // Load and display chart
+        async function loadChart(timeframe = 'YTD') {
+            try {
+                currentTimeframe = timeframe;
+
+                // Update active button
+                document.querySelectorAll('.timeframe-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.textContent === timeframe) {
+                        btn.classList.add('active');
+                    }
+                });
+
+                // Fetch chart data
+                const response = await fetch(`/api/portfolio/chart?timeframe=${timeframe}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    renderChart(data.data);
+                    updateChartStats(data.data);
+                } else {
+                    console.error('Error loading chart:', data.error);
+                }
+            } catch (err) {
+                console.error('Chart loading error:', err);
+            }
+        }
+
+        function renderChart(chartData) {
+            const ctx = document.getElementById('portfolioChart').getContext('2d');
+
+            // Destroy existing chart
+            if (portfolioChartInstance) {
+                portfolioChartInstance.destroy();
+            }
+
+            // Prepare data
+            const labels = chartData.dates.map(date => {
+                const d = new Date(date);
+                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            });
+
+            const values = chartData.values;
+
+            // Create gradient
+            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, 'rgba(102, 126, 234, 0.3)');
+            gradient.addColorStop(1, 'rgba(102, 126, 234, 0.0)');
+
+            // Create chart
+            portfolioChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Portfolio Value',
+                        data: values,
+                        borderColor: '#667eea',
+                        backgroundColor: gradient,
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 6,
+                        pointHoverBackgroundColor: '#667eea',
+                        pointHoverBorderColor: '#fff',
+                        pointHoverBorderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(26, 31, 58, 0.95)',
+                            titleColor: '#fff',
+                            bodyColor: '#e4e8f0',
+                            borderColor: 'rgba(102, 126, 234, 0.5)',
+                            borderWidth: 1,
+                            padding: 12,
+                            displayColors: false,
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed.y;
+                                    return '$' + value.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#8b92a7',
+                                maxRotation: 0,
+                                autoSkipPadding: 20
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#8b92a7',
+                                callback: function(value) {
+                                    return '$' + (value / 1000).toFixed(0) + 'k';
+                                }
+                            }
+                        }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    }
+                }
+            });
+        }
+
+        function updateChartStats(chartData) {
+            // Initial value
+            const initialValue = chartData.initial_value || 150000;
+            document.getElementById('chart-initial-value').textContent = '$' + initialValue.toLocaleString();
+
+            // Current value
+            const currentValue = chartData.current_value || initialValue;
+            document.getElementById('chart-current-value').textContent = '$' + currentValue.toLocaleString();
+
+            // Total return
+            const totalReturn = chartData.total_return || 0;
+            const returnElem = document.getElementById('chart-total-return');
+            const returnSign = totalReturn >= 0 ? '+' : '';
+            returnElem.textContent = returnSign + totalReturn.toFixed(2) + '%';
+            returnElem.style.color = totalReturn >= 0 ? '#10b981' : '#ef4444';
+
+            // Days tracked
+            const daysTracked = chartData.dates ? chartData.dates.length : 0;
+            document.getElementById('chart-days-tracked').textContent = daysTracked;
         }
     </script>
 </body>

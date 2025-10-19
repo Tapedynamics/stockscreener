@@ -11,6 +11,7 @@ from datetime import datetime
 from database import get_db
 from scheduler import create_scheduler
 from price_tracker import get_price_tracker
+from portfolio_simulator import get_simulator
 import atexit
 
 app = Flask(__name__)
@@ -448,6 +449,50 @@ def save_settings():
         return jsonify({
             'success': True,
             'message': 'Settings saved successfully'
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/portfolio/chart', methods=['GET'])
+def get_portfolio_chart():
+    """Get portfolio chart data with historical simulation"""
+    try:
+        db = get_db()
+
+        # Get timeframe parameter (default: YTD)
+        timeframe = request.args.get('timeframe', 'YTD')
+
+        # Get latest portfolio
+        portfolio = db.get_latest_portfolio()
+
+        if not portfolio:
+            return jsonify({
+                'success': False,
+                'error': 'No portfolio found'
+            }), 404
+
+        # Get initial value from settings
+        initial_value = float(db.get_setting('initial_value', '150000'))
+
+        # Create simulator
+        simulator = get_simulator(initial_value)
+
+        # Get chart data for timeframe
+        chart_data = simulator.get_timeframe_data({
+            'take_profit': portfolio['take_profit'],
+            'hold': portfolio['hold'],
+            'buffer': portfolio['buffer']
+        }, timeframe)
+
+        return jsonify({
+            'success': True,
+            'data': chart_data,
+            'timeframe': timeframe
         })
 
     except Exception as e:
