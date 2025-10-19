@@ -701,6 +701,9 @@
                 <button class="btn-secondary" onclick="exportCSV()">
                     📥 Export CSV
                 </button>
+                <button class="btn-secondary" onclick="populateHistory()" id="populateHistoryBtn" style="display: none;">
+                    🗄️ Generate History
+                </button>
             </div>
         </div>
 
@@ -1224,6 +1227,41 @@
         }
 
         // ========================================
+        // HISTORY POPULATION
+        // ========================================
+        async function populateHistory() {
+            const button = document.getElementById('populateHistoryBtn');
+            if (!confirm('Generate 42 weeks of historical data? This will take ~5 seconds.')) {
+                return;
+            }
+
+            button.disabled = true;
+            button.textContent = 'Generating...';
+
+            try {
+                const response = await fetch('/api/admin/populate-history', {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(`Success! Generated ${data.generated} snapshots.\nTotal: ${data.snapshots_after} snapshots in database.`);
+                    // Reload history tab
+                    await loadPortfolioHistory();
+                    button.style.display = 'none';
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (err) {
+                alert('Error generating history: ' + err.message);
+            } finally {
+                button.disabled = false;
+                button.textContent = '🗄️ Generate History';
+            }
+        }
+
+        // ========================================
         // PAGE INITIALIZATION
         // ========================================
         window.addEventListener('load', async () => {
@@ -1245,6 +1283,13 @@
                 // Load portfolio stats
                 console.log('Loading portfolio stats...');
                 await loadPortfolioStats();
+
+                // Check if we need to show history population button
+                const historyResponse = await fetch('/api/portfolio/history');
+                const historyData = await historyResponse.json();
+                if (historyData.success && historyData.data && historyData.data.length < 5) {
+                    document.getElementById('populateHistoryBtn').style.display = 'block';
+                }
 
                 console.log('Application initialized successfully');
             } catch (err) {

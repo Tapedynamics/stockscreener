@@ -25,6 +25,7 @@ from constants import (
 )
 import atexit
 from dotenv import load_dotenv
+from populate_history_endpoint import history_bp
 
 # Load environment variables
 load_dotenv()
@@ -38,6 +39,9 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+
+# Register blueprints
+app.register_blueprint(history_bp)
 
 # URL del tuo screener Finviz (from environment or default)
 FINVIZ_URL = os.getenv(
