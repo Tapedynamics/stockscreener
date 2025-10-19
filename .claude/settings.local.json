@@ -12,7 +12,8 @@
       "Bash(git commit -m \"$(cat <<''EOF''\nInitial commit: Stock Screener with Flask web interface\n\n- Add Flask web application with clean UI\n- Add Python script for command-line usage\n- Integrate Finviz screener with custom parameters\n- Organize stocks into Take Profit, Hold, and Buffer categories\n- Add requirements.txt for dependencies\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(git push -u origin main)",
       "Bash(git commit -m \"$(cat <<''EOF''\nAdd Render.com deployment configuration\n\n- Add gunicorn to requirements.txt for production server\n- Add render.yaml for automatic deployment\n- Add comprehensive README.md with installation and deployment instructions\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(git commit -m \"Update Finviz screener URL with adjusted margin filters\")"
     ],
     "deny": [],
     "ask": []
