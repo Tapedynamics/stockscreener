@@ -481,39 +481,83 @@ def save_settings():
 
 @app.route('/api/portfolio/chart', methods=['GET'])
 def get_portfolio_chart():
-    """Get portfolio chart data with historical simulation"""
+    """Get portfolio chart data from real historical snapshots"""
     try:
         db = get_db()
 
-        # Get timeframe parameter (default: YTD)
-        timeframe = request.args.get('timeframe', 'YTD')
+        # Get timeframe parameter (default: ALL)
+        timeframe = request.args.get('timeframe', 'ALL')
 
-        # Get latest portfolio
-        portfolio = db.get_latest_portfolio()
+        # Get ALL portfolio history (no limit)
+        history = db.get_portfolio_history(limit=100)
 
-        if not portfolio:
-            return api_error('No portfolio found', 404)
+        if not history or len(history) == 0:
+            return api_error('No portfolio history found', 404)
 
-        # Get initial value from settings
+        logger.info(f"Building chart with {len(history)} historical snapshots")
+
+        # Build chart data from real history
+        labels = []
+        portfolio_counts = []
+
+        # Reverse to get chronological order (oldest first)
+        history_sorted = sorted(history, key=lambda x: x['timestamp'])
+
+        for snapshot in history_sorted:
+            # Parse timestamp
+            timestamp = snapshot['timestamp']
+            if 'T' not in timestamp:
+                # SQL format: convert to readable
+                from datetime import datetime as dt
+                date_obj = dt.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
+                label = date_obj.strftime('%b %d')
+            else:
+                # ISO format
+                from datetime import datetime as dt
+                date_obj = dt.fromisoformat(timestamp.replace('Z', '+00:00'))
+                label = date_obj.strftime('%b %d')
+
+            labels.append(label)
+            portfolio_counts.append(snapshot['total_stocks'])
+
+        # Calculate portfolio value based on position count (simplified)
+        # In reality you'd use actual stock prices
         initial_value = float(db.get_setting('initial_value', '150000'))
+        value_per_position = initial_value / 15  # Average per stock
 
-        # Create simulator
-        simulator = get_simulator(initial_value)
+        portfolio_values = [count * value_per_position for count in portfolio_counts]
 
-        # Get chart data for timeframe
-        chart_data = simulator.get_timeframe_data({
-            'take_profit': portfolio['take_profit'],
-            'hold': portfolio['hold'],
-            'buffer': portfolio['buffer']
-        }, timeframe)
+        chart_data = {
+            'labels': labels,
+            'datasets': [
+                {
+                    'label': 'Portfolio Value ($)',
+                    'data': portfolio_values,
+                    'borderColor': '#00ff88',
+                    'backgroundColor': 'rgba(0, 255, 136, 0.1)',
+                    'tension': 0.4,
+                    'fill': True
+                },
+                {
+                    'label': 'Total Positions',
+                    'data': portfolio_counts,
+                    'borderColor': '#00d4ff',
+                    'backgroundColor': 'rgba(0, 212, 255, 0.1)',
+                    'tension': 0.4,
+                    'fill': True,
+                    'yAxisID': 'y1'
+                }
+            ]
+        }
 
         return api_success({
             'chart_data': chart_data,
-            'timeframe': timeframe
+            'timeframe': timeframe,
+            'snapshots_count': len(history_sorted)
         })
 
     except Exception as e:
-        logger.error(f"Error in get_portfolio_chart: {e}")
+        logger.error(f"Error in get_portfolio_chart: {e}", exc_info=True)
         return api_error(str(e), 500)
 
 

@@ -1641,14 +1641,9 @@
         function renderChart(chartData) {
             console.log('Rendering chart with data:', chartData);
 
-            // Validate data
-            if (!chartData || !chartData.dates || !chartData.values) {
-                console.error('Invalid chart data:', chartData);
-                return;
-            }
-
-            if (chartData.dates.length === 0) {
-                console.warn('No data points to display');
+            // Validate data - check for new format (labels/datasets) or old format (dates/values)
+            if (!chartData) {
+                console.error('No chart data provided');
                 return;
             }
 
@@ -1667,48 +1662,121 @@
                 portfolioChartInstance = null;
             }
 
-            // Prepare data
-            const labels = chartData.dates.map(date => {
-                const d = new Date(date);
-                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            });
+            // Handle new format with real data (labels + datasets)
+            let labels, datasets;
 
-            const values = chartData.values;
+            if (chartData.labels && chartData.datasets) {
+                // New format: real historical data
+                labels = chartData.labels;
+                datasets = chartData.datasets;
+                console.log(`Rendering ${labels.length} data points from historical snapshots`);
+            } else if (chartData.dates && chartData.values) {
+                // Old format: simulated data (fallback)
+                labels = chartData.dates.map(date => {
+                    const d = new Date(date);
+                    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                });
 
-            console.log(`Rendering ${labels.length} data points`);
+                const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                gradient.addColorStop(0, 'rgba(102, 126, 234, 0.3)');
+                gradient.addColorStop(1, 'rgba(102, 126, 234, 0.0)');
 
-            // Create gradient
-            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-            gradient.addColorStop(0, 'rgba(102, 126, 234, 0.3)');
-            gradient.addColorStop(1, 'rgba(102, 126, 234, 0.0)');
+                datasets = [{
+                    label: 'Portfolio Value',
+                    data: chartData.values,
+                    borderColor: '#667eea',
+                    backgroundColor: gradient,
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0,
+                    pointHoverRadius: 6,
+                    pointHoverBackgroundColor: '#667eea',
+                    pointHoverBorderColor: '#fff',
+                    pointHoverBorderWidth: 2
+                }];
+
+                console.log(`Rendering ${labels.length} simulated data points`);
+            } else {
+                console.error('Invalid chart data format:', chartData);
+                return;
+            }
 
             // Create chart
             portfolioChartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: labels,
-                    datasets: [{
-                        label: 'Portfolio Value',
-                        data: values,
-                        borderColor: '#667eea',
-                        backgroundColor: gradient,
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 0,
-                        pointHoverRadius: 6,
-                        pointHoverBackgroundColor: '#667eea',
-                        pointHoverBorderColor: '#fff',
-                        pointHoverBorderWidth: 2
-                    }]
+                    datasets: datasets
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
                     plugins: {
                         legend: {
-                            display: false
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                color: '#e0e0e0',
+                                font: {
+                                    size: 12
+                                },
+                                usePointStyle: true
+                            }
                         },
+                        tooltip: {
+                            backgroundColor: 'rgba(20, 25, 45, 0.95)',
+                            titleColor: '#fff',
+                            bodyColor: '#e0e0e0',
+                            borderColor: '#667eea',
+                            borderWidth: 1,
+                            padding: 12,
+                            displayColors: true
+                        }
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            ticks: {
+                                color: '#e0e0e0',
+                                callback: function(value) {
+                                    return '$' + value.toLocaleString();
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            ticks: {
+                                color: '#00d4ff'
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#e0e0e0',
+                                maxRotation: 0,
+                                autoSkipPadding: 20
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)',
+                                drawBorder: false
+                            }
+                        }
+                    },
+                    plugins: {
                         tooltip: {
                             backgroundColor: 'rgba(26, 31, 58, 0.95)',
                             titleColor: '#fff',
@@ -1716,37 +1784,25 @@
                             borderColor: 'rgba(102, 126, 234, 0.5)',
                             borderWidth: 1,
                             padding: 12,
-                            displayColors: false,
+                            displayColors: true,
                             callbacks: {
                                 label: function(context) {
+                                    const label = context.dataset.label || '';
                                     const value = context.parsed.y;
-                                    return '$' + value.toLocaleString();
+                                    if (label.includes('Value')) {
+                                        return label + ': $' + value.toLocaleString();
+                                    } else {
+                                        return label + ': ' + value;
+                                    }
                                 }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: {
-                                color: 'rgba(255, 255, 255, 0.05)',
-                                drawBorder: false
-                            },
-                            ticks: {
-                                color: '#8b92a7',
-                                maxRotation: 0,
-                                autoSkipPadding: 20
                             }
                         },
-                        y: {
-                            grid: {
-                                color: 'rgba(255, 255, 255, 0.05)',
-                                drawBorder: false
-                            },
-                            ticks: {
-                                color: '#8b92a7',
-                                callback: function(value) {
-                                    return '$' + (value / 1000).toFixed(0) + 'k';
-                                }
+                        legend: {
+                            display: true,
+                            labels: {
+                                color: '#e0e0e0',
+                                usePointStyle: true,
+                                padding: 15
                             }
                         }
                     },
