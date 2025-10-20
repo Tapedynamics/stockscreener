@@ -1030,6 +1030,52 @@ def reset_database():
         return api_error(str(e), 500)
 
 
+@app.route('/api/admin/migrate-postgres', methods=['POST'])
+def migrate_postgres():
+    """
+    ADMIN ENDPOINT: Drop and recreate all tables for PostgreSQL migration
+    Fixes DATETIME -> TIMESTAMP conversion issue
+    WARNING: This deletes ALL data!
+    """
+    try:
+        from db_adapter import adapter
+
+        db = get_db()
+        conn = db.get_connection()
+        cursor = conn.cursor()
+
+        logger.info("[MIGRATE] Starting PostgreSQL table migration...")
+
+        # Drop all tables
+        tables = ['trades', 'portfolio_snapshots', 'activity_log', 'stock_performance', 'sold_positions', 'settings']
+
+        for table in tables:
+            try:
+                adapter.execute(cursor, f'DROP TABLE IF EXISTS {table} CASCADE')
+                logger.info(f"[MIGRATE] Dropped table: {table}")
+            except Exception as e:
+                logger.warning(f"[MIGRATE] Could not drop {table}: {e}")
+
+        conn.commit()
+        logger.info("[MIGRATE] All tables dropped")
+
+        # Recreate tables using init_db (will use adapter with TIMESTAMP)
+        conn.close()
+        db.init_db()
+        logger.info("[MIGRATE] All tables recreated with PostgreSQL types")
+
+        return api_success({
+            'message': 'PostgreSQL migration complete',
+            'tables_dropped': tables,
+            'tables_recreated': tables,
+            'database_type': adapter.db_type
+        })
+
+    except Exception as e:
+        logger.error(f"[MIGRATE] Migration failed: {e}")
+        return api_error(str(e), 500)
+
+
 @app.route('/api/portfolio/refresh-prices', methods=['GET'])
 def refresh_portfolio_prices():
     """Get real-time prices and calculate P&L for current portfolio"""
