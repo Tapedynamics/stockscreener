@@ -92,6 +92,20 @@ class Database:
             )
         ''')
 
+        # Sold positions tracking (for momentum rotation strategy)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sold_positions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker TEXT NOT NULL,
+                sold_date DATETIME NOT NULL,
+                sold_reason TEXT NOT NULL,
+                sold_rank INTEGER,
+                can_rebuy_after DATETIME,
+                rebought BOOLEAN DEFAULT 0,
+                rebought_date DATETIME
+            )
+        ''')
+
         # Create indexes for performance
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_portfolio_timestamp
@@ -111,6 +125,11 @@ class Database:
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_activity_action_type
             ON activity_log(action_type, timestamp DESC)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_sold_ticker_date
+            ON sold_positions(ticker, sold_date DESC)
         ''')
 
         conn.commit()
@@ -372,6 +391,156 @@ class Database:
         conn.close()
 
         return [dict(row) for row in rows]
+
+    def record_sale(self, ticker: str, reason: str, rank: int = None) -> int:
+        """Record a stock sale for momentum rotation tracking
+
+        Args:
+            ticker: Stock ticker sold
+            reason: Reason for sale ('top_3' or 'drop_out')
+            rank: Rank at time of sale
+
+        Returns:
+            ID of created record
+        """
+        from datetime import datetime, timedelta
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        sold_date = datetime.now()
+
+        # Calculate can_rebuy_after based on reason
+        if reason == 'top_3':
+            # Must wait 2 weeks for top 3 sales
+            can_rebuy_after = sold_date + timedelta(weeks=2)
+        else:
+            # Drop-outs can rebuy immediately if back in top 15
+            can_rebuy_after = sold_date
+
+        cursor.execute('''
+            INSERT INTO sold_positions
+            (ticker, sold_date, sold_reason, sold_rank, can_rebuy_after)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (ticker, sold_date.isoformat(), reason, rank, can_rebuy_after.isoformat()))
+
+        record_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        logger.info(f"Recorded sale: {ticker} (reason: {reason}, rank: {rank})")
+        return record_id
+
+    def check_reentry_allowed(self, ticker: str, current_rank: int = None) -> Tuple[bool, str]:
+        """Check if a ticker can be re-entered based on cooldown rules
+
+        Args:
+            ticker: Stock ticker to check
+            current_rank: Current rank in momentum list (1-15)
+
+        Returns:
+            Tuple of (allowed, reason)
+        """
+        from datetime import datetime
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # Get most recent non-rebought sale
+        cursor.execute('''
+            SELECT sold_date, sold_reason, sold_rank, can_rebuy_after
+            FROM sold_positions
+            WHERE ticker = ? AND rebought = 0
+            ORDER BY sold_date DESC
+            LIMIT 1
+        ''', (ticker,))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            # Never sold or already rebought - OK to buy
+            return True, "No active cooldown"
+
+        sold_date = datetime.fromisoformat(row['sold_date'])
+        sold_reason = row['sold_reason']
+        can_rebuy_after = datetime.fromisoformat(row['can_rebuy_after'])
+        now = datetime.now()
+
+        # Check time-based cooldown
+        if now < can_rebuy_after:
+            days_remaining = (can_rebuy_after - now).days
+            return False, f"Cooldown active ({days_remaining} days remaining)"
+
+        # Additional check for top_3 sales
+        if sold_reason == 'top_3' and current_rank is not None:
+            # Must have dropped to rank 9-13 (positions 9-13 in top 15)
+            if current_rank < 9:
+                return False, f"Rank too high ({current_rank}), must drop to 9-13"
+
+        return True, "Cooldown expired, OK to rebuy"
+
+    def mark_rebought(self, ticker: str) -> None:
+        """Mark a ticker as rebought (clear cooldown)
+
+        Args:
+            ticker: Stock ticker that was rebought
+        """
+        from datetime import datetime
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            UPDATE sold_positions
+            SET rebought = 1, rebought_date = ?
+            WHERE ticker = ? AND rebought = 0
+        ''', (datetime.now().isoformat(), ticker))
+
+        conn.commit()
+        conn.close()
+
+        logger.info(f"Marked {ticker} as rebought")
+
+    def get_cooldown_stocks(self) -> List[Dict[str, Any]]:
+        """Get list of stocks currently in cooldown
+
+        Returns:
+            List of dicts with cooldown info
+        """
+        from datetime import datetime
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT ticker, sold_date, sold_reason, sold_rank, can_rebuy_after
+            FROM sold_positions
+            WHERE rebought = 0
+            ORDER BY sold_date DESC
+        ''')
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        now = datetime.now()
+        cooldowns = []
+
+        for row in rows:
+            can_rebuy_after = datetime.fromisoformat(row['can_rebuy_after'])
+            days_remaining = max(0, (can_rebuy_after - now).days)
+
+            cooldowns.append({
+                'ticker': row['ticker'],
+                'sold_date': row['sold_date'],
+                'sold_reason': row['sold_reason'],
+                'sold_rank': row['sold_rank'],
+                'can_rebuy_after': row['can_rebuy_after'],
+                'days_remaining': days_remaining,
+                'can_rebuy': now >= can_rebuy_after
+            })
+
+        return cooldowns
 
 
 # Convenience function

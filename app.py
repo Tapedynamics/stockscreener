@@ -10,7 +10,8 @@ import re
 import os
 import logging
 from datetime import datetime
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, List
+import yfinance as yf
 from database import get_db
 from scheduler import create_scheduler
 from price_tracker import get_price_tracker
@@ -129,6 +130,281 @@ def organize_basket(tickers: list) -> dict:
     }
 
     return basket
+
+
+def calculate_momentum_rankings(tickers: list) -> Dict[str, Dict[str, Any]]:
+    """
+    Calculate 30-day momentum for list of tickers
+
+    Args:
+        tickers: List of stock tickers to rank
+
+    Returns:
+        Dict mapping ticker to {rank, performance, price_start, price_end}
+    """
+    try:
+        if not tickers:
+            logger.warning("No tickers provided for momentum calculation")
+            return {}
+
+        # Download 35 days of data (to ensure we have 30 trading days)
+        data = yf.download(tickers, period='35d', progress=False, auto_adjust=True)
+
+        if data.empty:
+            logger.warning("No price data downloaded for momentum calculation")
+            return {}
+
+        # Get Close prices
+        if 'Close' in data.columns:
+            prices = data['Close']
+        elif isinstance(data.columns, __import__('pandas').MultiIndex):
+            prices = data['Close']
+        else:
+            prices = data
+
+        # Calculate momentum for each ticker
+        momentum_data = {}
+
+        for ticker in tickers:
+            try:
+                if ticker in prices.columns:
+                    stock_prices = prices[ticker].dropna()
+                    if len(stock_prices) >= 2:
+                        # Get first and last price
+                        first_price = stock_prices.iloc[0]
+                        last_price = stock_prices.iloc[-1]
+
+                        # Calculate 30-day performance
+                        performance = ((last_price - first_price) / first_price) * 100
+
+                        momentum_data[ticker] = {
+                            'performance': performance,
+                            'price_start': float(first_price),
+                            'price_end': float(last_price),
+                            'days': len(stock_prices)
+                        }
+                        logger.debug(f"{ticker}: 30d performance = {performance:.2f}%")
+                    else:
+                        logger.warning(f"{ticker}: Insufficient price data for momentum")
+                else:
+                    logger.warning(f"{ticker}: Not found in price data")
+            except Exception as e:
+                logger.error(f"Error calculating momentum for {ticker}: {e}")
+
+        # Rank tickers by performance (descending)
+        sorted_tickers = sorted(
+            momentum_data.items(),
+            key=lambda x: x[1]['performance'],
+            reverse=True
+        )
+
+        # Add rank to each ticker
+        ranked_data = {}
+        for rank, (ticker, data) in enumerate(sorted_tickers, 1):
+            ranked_data[ticker] = {
+                **data,
+                'rank': rank
+            }
+
+        logger.info(f"Calculated momentum for {len(ranked_data)} tickers")
+        return ranked_data
+
+    except Exception as e:
+        logger.error(f"Error calculating momentum rankings: {e}")
+        return {}
+
+
+def calculate_real_portfolio_value(tickers: list, initial_investment: float = 150000) -> float:
+    """
+    Calculate real portfolio value using Yahoo Finance prices
+
+    Args:
+        tickers: List of stock tickers
+        initial_investment: Total initial investment amount
+
+    Returns:
+        Current portfolio value based on real prices
+    """
+    try:
+        if not tickers:
+            logger.warning("No tickers provided for portfolio value calculation")
+            return initial_investment
+
+        # Equal allocation per stock
+        investment_per_stock = initial_investment / len(tickers)
+
+        # Download current prices
+        data = yf.download(tickers, period='5d', progress=False, auto_adjust=True)
+
+        if data.empty:
+            logger.warning("No price data downloaded from Yahoo Finance")
+            return initial_investment
+
+        # Get Close prices
+        if 'Close' in data.columns:
+            prices = data['Close']
+        elif isinstance(data.columns, __import__('pandas').MultiIndex):
+            prices = data['Close']
+        else:
+            prices = data
+
+        # Get latest prices for each stock
+        total_value = 0
+        successful_tickers = 0
+
+        for ticker in tickers:
+            try:
+                if ticker in prices.columns:
+                    stock_prices = prices[ticker].dropna()
+                    if len(stock_prices) >= 2:
+                        # Get first and last price from the period
+                        first_price = stock_prices.iloc[0]
+                        last_price = stock_prices.iloc[-1]
+
+                        # Calculate value for this stock
+                        shares = investment_per_stock / first_price
+                        current_value = shares * last_price
+                        total_value += current_value
+                        successful_tickers += 1
+                        logger.debug(f"{ticker}: ${first_price:.2f} -> ${last_price:.2f}, Value: ${current_value:.2f}")
+                    else:
+                        # Not enough data, use initial investment
+                        total_value += investment_per_stock
+                        logger.warning(f"{ticker}: Insufficient price data, using initial value")
+                else:
+                    # Ticker not found, use initial investment
+                    total_value += investment_per_stock
+                    logger.warning(f"{ticker}: Not found in price data, using initial value")
+            except Exception as e:
+                logger.error(f"Error processing {ticker}: {e}")
+                total_value += investment_per_stock
+
+        if successful_tickers == 0:
+            logger.warning("No successful price lookups, returning initial investment")
+            return initial_investment
+
+        logger.info(f"Portfolio value calculated: ${total_value:,.2f} ({successful_tickers}/{len(tickers)} tickers)")
+        return total_value
+
+    except Exception as e:
+        logger.error(f"Error calculating portfolio value: {e}")
+        return initial_investment
+
+
+def calculate_rotation_trades(current_portfolio: Dict, all_tickers: List[str], portfolio_size: int = 12) -> Dict[str, Any]:
+    """
+    Calculate momentum rotation trade suggestions
+
+    Args:
+        current_portfolio: Current portfolio dict with take_profit, hold, buffer
+        all_tickers: List of all tickers from screener (top 15+)
+        portfolio_size: Target portfolio size (default 12)
+
+    Returns:
+        Dict with {to_sell: [...], to_buy: [...], rankings: {...}}
+    """
+    db = get_db()
+
+    # Get current holdings
+    current_holdings = (current_portfolio.get('take_profit', []) +
+                       current_portfolio.get('hold', []) +
+                       current_portfolio.get('buffer', []))
+
+    # Calculate momentum rankings for all tickers
+    logger.info(f"Calculating momentum for {len(all_tickers)} tickers...")
+    rankings = calculate_momentum_rankings(all_tickers)
+
+    if not rankings:
+        logger.warning("No momentum rankings available")
+        return {'to_sell': [], 'to_buy': [], 'rankings': {}}
+
+    # Get top 15 by momentum
+    sorted_tickers = sorted(rankings.items(), key=lambda x: x[1]['rank'])
+    top_15 = [t[0] for t in sorted_tickers[:15]]
+
+    logger.info(f"Top 15 by momentum: {', '.join(top_15[:5])}... (showing first 5)")
+
+    # Determine sells
+    to_sell = []
+
+    # Rule 1: Sell top 3 ranked stocks from current holdings
+    holdings_with_ranks = [(ticker, rankings[ticker]['rank'])
+                           for ticker in current_holdings
+                           if ticker in rankings and rankings[ticker]['rank'] <= 15]
+    holdings_with_ranks.sort(key=lambda x: x[1])  # Sort by rank
+
+    for ticker, rank in holdings_with_ranks[:3]:  # Top 3
+        if ticker in current_holdings:
+            to_sell.append({
+                'ticker': ticker,
+                'reason': 'top_3',
+                'rank': rank,
+                'performance': rankings[ticker]['performance']
+            })
+            logger.info(f"Sell {ticker} (top 3, rank #{rank})")
+
+    # Rule 2: Sell stocks that dropped out of top 15
+    for ticker in current_holdings:
+        if ticker not in top_15:
+            rank = rankings.get(ticker, {}).get('rank', 999)
+            if ticker not in [s['ticker'] for s in to_sell]:  # Don't double-count
+                to_sell.append({
+                    'ticker': ticker,
+                    'reason': 'drop_out',
+                    'rank': rank,
+                    'performance': rankings.get(ticker, {}).get('performance', 0)
+                })
+                logger.info(f"Sell {ticker} (dropped out, rank #{rank})")
+
+    # Calculate how many new stocks we need to buy
+    holdings_after_sells = [t for t in current_holdings if t not in [s['ticker'] for s in to_sell]]
+    slots_to_fill = portfolio_size - len(holdings_after_sells)
+
+    logger.info(f"Current: {len(current_holdings)}, After sells: {len(holdings_after_sells)}, Slots to fill: {slots_to_fill}")
+
+    # Determine buys with re-entry rules
+    to_buy = []
+    candidates = []
+
+    for ticker in top_15:
+        if ticker in holdings_after_sells:
+            continue  # Already holding
+
+        rank = rankings[ticker]['rank']
+
+        # Check re-entry rules
+        allowed, reason = db.check_reentry_allowed(ticker, rank)
+
+        if allowed:
+            # Prefer ranks 4-13 (after top 3)
+            if rank >= 4:
+                candidates.append({
+                    'ticker': ticker,
+                    'rank': rank,
+                    'performance': rankings[ticker]['performance'],
+                    'reentry_reason': reason
+                })
+                logger.debug(f"Buy candidate: {ticker} (rank #{rank})")
+        else:
+            logger.debug(f"Skip {ticker}: {reason}")
+
+    # Sort candidates by rank (prefer lower ranks within 4-13)
+    candidates.sort(key=lambda x: x['rank'])
+
+    # Take the top N candidates
+    to_buy = candidates[:slots_to_fill]
+
+    for buy in to_buy:
+        logger.info(f"Buy {buy['ticker']} (rank #{buy['rank']})")
+
+    return {
+        'to_sell': to_sell,
+        'to_buy': to_buy,
+        'rankings': rankings,
+        'top_15': top_15,
+        'current_holdings': current_holdings,
+        'slots_to_fill': slots_to_fill
+    }
 
 
 def automated_screener_job():
@@ -299,26 +575,17 @@ def run_screener():
                 new_portfolio_value = previous_portfolio.get('portfolio_value') or float(db.get_setting('initial_value', '150000'))
                 logger.info(f"Recent snapshot exists ({hours_since_last:.1f}h ago) - Skipping new snapshot - Value: ${new_portfolio_value:,.2f}")
             else:
-                # More than 6 hours - calculate new value with simulated return
-                if previous_portfolio.get('portfolio_value'):
-                    previous_value = previous_portfolio['portfolio_value']
-                    # Simulate return (will be replaced with real prices)
-                    import random
-                    daily_return = random.uniform(-0.02, 0.03)  # -2% to +3% per period
-                    # Apply bull market bias
-                    if random.random() < 0.65:
-                        daily_return = abs(daily_return)
-                    new_portfolio_value = previous_value * (1 + daily_return)
-                    logger.info(f"Creating new snapshot - Simulated return: {daily_return*100:.2f}% - New value: ${new_portfolio_value:,.2f}")
-                else:
-                    initial_value = float(db.get_setting('initial_value', '150000'))
-                    new_portfolio_value = initial_value
-                    logger.info(f"Creating new snapshot - Initial value: ${new_portfolio_value:,.2f}")
+                # More than 6 hours - calculate real portfolio value
+                initial_value = float(db.get_setting('initial_value', '150000'))
+                all_tickers = basket['take_profit'] + basket['hold'] + basket['buffer']
+                new_portfolio_value = calculate_real_portfolio_value(all_tickers, initial_value)
+                logger.info(f"Creating new snapshot - Real portfolio value: ${new_portfolio_value:,.2f}")
         else:
-            # First run - use initial setting
+            # First run - calculate real value
             initial_value = float(db.get_setting('initial_value', '150000'))
-            new_portfolio_value = initial_value
-            logger.info(f"First portfolio snapshot - Initial value: ${new_portfolio_value:,.2f}")
+            all_tickers = basket['take_profit'] + basket['hold'] + basket['buffer']
+            new_portfolio_value = calculate_real_portfolio_value(all_tickers, initial_value)
+            logger.info(f"First portfolio snapshot - Real value: ${new_portfolio_value:,.2f}")
 
         # Save new snapshot only if enough time has passed
         if should_create_new_snapshot:
@@ -782,6 +1049,92 @@ def check_and_populate_history():
                 logger.error(f"Error generating historical data: {e}")
     except Exception as e:
         logger.error(f"Error checking database: {e}")
+
+
+@app.route('/api/rotation/suggest', methods=['GET'])
+def get_rotation_suggestions():
+    """Get momentum rotation trade suggestions"""
+    try:
+        db = get_db()
+
+        # Get current portfolio
+        current_portfolio = db.get_latest_portfolio()
+
+        if not current_portfolio:
+            return api_success({
+                'to_sell': [],
+                'to_buy': [],
+                'message': 'No current portfolio found'
+            })
+
+        # Get top tickers from screener
+        tickers = get_finviz_stocks(FINVIZ_URL)
+
+        if not tickers or len(tickers) < 15:
+            return api_error('Insufficient tickers from screener', 400)
+
+        # Calculate rotation trades
+        rotation = calculate_rotation_trades(current_portfolio, tickers[:20], portfolio_size=12)
+
+        return api_success({
+            'to_sell': rotation['to_sell'],
+            'to_buy': rotation['to_buy'],
+            'top_15': rotation['top_15'],
+            'current_holdings': rotation['current_holdings'],
+            'slots_to_fill': rotation['slots_to_fill'],
+            'total_sells': len(rotation['to_sell']),
+            'total_buys': len(rotation['to_buy'])
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting rotation suggestions: {e}", exc_info=True)
+        return api_error(str(e), 500)
+
+
+@app.route('/api/rotation/cooldown', methods=['GET'])
+def get_cooldown_stocks():
+    """Get list of stocks in cooldown period"""
+    try:
+        db = get_db()
+        cooldowns = db.get_cooldown_stocks()
+
+        return api_success({
+            'cooldowns': cooldowns,
+            'total': len(cooldowns)
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting cooldown stocks: {e}", exc_info=True)
+        return api_error(str(e), 500)
+
+
+@app.route('/api/rotation/rankings', methods=['GET'])
+def get_momentum_rankings():
+    """Get momentum rankings for current screener results"""
+    try:
+        # Get tickers from screener
+        tickers = get_finviz_stocks(FINVIZ_URL)
+
+        if not tickers or len(tickers) < 15:
+            return api_error('Insufficient tickers from screener', 400)
+
+        # Calculate momentum
+        rankings = calculate_momentum_rankings(tickers[:20])
+
+        # Convert to list sorted by rank
+        ranked_list = sorted(
+            [{'ticker': k, **v} for k, v in rankings.items()],
+            key=lambda x: x['rank']
+        )
+
+        return api_success({
+            'rankings': ranked_list,
+            'total': len(ranked_list)
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting momentum rankings: {e}", exc_info=True)
+        return api_error(str(e), 500)
 
 
 if __name__ == '__main__':
