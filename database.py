@@ -14,14 +14,21 @@ logger = logging.getLogger(__name__)
 
 
 class Database:
-    def __init__(self, db_path: str = 'portfolio.db'):
+    def __init__(self, db_path: str = 'portfolio.db', skip_init: bool = False):
         """Initialize database connection
 
         Args:
             db_path: Path to SQLite database file
+            skip_init: If True, skip init_db() call (useful for PostgreSQL migration)
         """
         self.db_path = db_path
-        self.init_db()
+        if not skip_init:
+            try:
+                self.init_db()
+            except Exception as e:
+                logger.error(f"Failed to initialize database (migration might be needed): {e}")
+                # Don't raise - allow app to start even if init fails
+                # Migration endpoint will fix the schema
 
     def get_connection(self):
         """Get database connection

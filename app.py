@@ -1082,7 +1082,8 @@ def migrate_postgres():
         # Recreate tables using init_db (will use adapter with TIMESTAMP)
         conn.close()
         logger.info("[MIGRATE] Creating Database instance to recreate tables...")
-        new_db = Database()
+        new_db = Database(skip_init=True)  # Don't call init_db in constructor
+        new_db.init_db()  # Call it manually AFTER tables are dropped
         logger.info("[MIGRATE] All tables recreated successfully")
 
         return api_success({
