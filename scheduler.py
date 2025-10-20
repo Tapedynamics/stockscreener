@@ -27,18 +27,22 @@ class PortfolioScheduler:
         self.scheduler = BackgroundScheduler(timezone=pytz.timezone('Europe/Rome'))
         self.is_running = False
 
-    def start(self):
-        """Start the scheduler"""
+    def start(self, run_today_at_19=False):
+        """Start the scheduler
+
+        Args:
+            run_today_at_19: If True, adds one-time job for today at 19:00
+        """
         if self.is_running:
             logger.warning("Scheduler is already running")
             return
 
-        # Schedule for Monday at 19:00 CET
+        # Schedule recurring Monday at 20:00 CET (19:00 London)
         self.scheduler.add_job(
             func=self.run_rebalance,
             trigger=CronTrigger(
                 day_of_week='mon',
-                hour=19,
+                hour=20,
                 minute=0,
                 timezone=pytz.timezone('Europe/Rome')
             ),
@@ -47,10 +51,30 @@ class PortfolioScheduler:
             replace_existing=True
         )
 
+        # Add one-time job for today at 20:00 if requested
+        if run_today_at_19:
+            from datetime import datetime
+            tz = pytz.timezone('Europe/Rome')
+            now = datetime.now(tz)
+            today_20 = now.replace(hour=20, minute=0, second=0, microsecond=0)
+
+            if now < today_20:  # Only if 20:00 hasn't passed
+                self.scheduler.add_job(
+                    func=self.run_rebalance,
+                    trigger='date',
+                    run_date=today_20,
+                    id='first_order_today',
+                    name='First Order - Today 20:00 CET',
+                    replace_existing=True
+                )
+                logger.info(f"🎯 FIRST ORDER scheduled for TODAY at 20:00 CET / 19:00 London (in {int((today_20 - now).total_seconds() / 60)} minutes)")
+            else:
+                logger.warning("20:00 CET has already passed today - first order skipped")
+
         self.scheduler.start()
         self.is_running = True
 
-        logger.info("✅ Scheduler started - Weekly rebalance scheduled for Monday 19:00 CET")
+        logger.info("✅ Scheduler started - Weekly rebalance scheduled for Monday 20:00 CET (19:00 London)")
 
     def stop(self):
         """Stop the scheduler"""
@@ -96,16 +120,17 @@ class PortfolioScheduler:
         }
 
 
-def create_scheduler(screener_function):
+def create_scheduler(screener_function, run_today_at_19=False):
     """
     Factory function to create and start a scheduler
 
     Args:
         screener_function: Function to call for rebalancing
+        run_today_at_19: If True, schedule first order today at 19:00
 
     Returns:
         PortfolioScheduler instance
     """
     scheduler = PortfolioScheduler(screener_function)
-    scheduler.start()
+    scheduler.start(run_today_at_19=run_today_at_19)
     return scheduler

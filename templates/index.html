@@ -691,16 +691,8 @@
         <!-- Control Panel -->
         <div class="control-panel">
             <div class="control-info">
-                <div class="next-rebalance">AI Agent Status</div>
-                <div class="rebalance-time">Automated Weekly Rebalancing at Monday 19:00</div>
-            </div>
-            <div style="display: flex; gap: 15px;">
-                <button class="btn-primary" id="runScreener" onclick="runScreener()">
-                    Run Screener Now
-                </button>
-                <button class="btn-secondary" onclick="exportCSV()">
-                    📥 Export CSV
-                </button>
+                <div class="next-rebalance">🤖 AI Agent Status</div>
+                <div class="rebalance-time" id="schedulerStatus">Automated Weekly Rebalancing at Monday 20:00 CET (19:00 London)</div>
             </div>
         </div>
 
@@ -711,7 +703,6 @@
             <a href="/chart" class="tab-button" style="text-decoration: none; display: inline-block;">📈 Charts</a>
             <a href="/compare" class="tab-button" style="text-decoration: none; display: inline-block;">⚖️ Compare</a>
             <a href="/benchmark" class="tab-button" style="text-decoration: none; display: inline-block;">📊 Benchmark</a>
-            <a href="/settings" class="tab-button" style="text-decoration: none; display: inline-block;">⚙️ Settings</a>
         </div>
 
         <!-- Loading -->
@@ -777,10 +768,9 @@
                         </div>
                     </div>
                     <div class="log-entry">
-                        <div class="log-time">Last Week</div>
+                        <div class="log-time">Waiting for first order...</div>
                         <div class="log-content">
-                            <div class="log-action buy">BUY Signal</div>
-                            <div class="log-description">Added 2 new positions to portfolio based on improved fundamentals</div>
+                            <div class="log-description">Activity will appear here after the first automated run at 20:00 CET</div>
                         </div>
                     </div>
                 </div>
@@ -799,60 +789,6 @@
         // ========================================
         // SCREENER FUNCTIONALITY
         // ========================================
-        async function runScreener() {
-            console.log('Running screener...');
-            const button = document.getElementById('runScreener');
-            const loading = document.getElementById('loading');
-            const error = document.getElementById('error');
-
-            // Reset UI
-            button.disabled = true;
-            button.textContent = 'Running...';
-            loading.style.display = 'block';
-            error.style.display = 'none';
-
-            try {
-                const response = await fetch('/api/screener');
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                const data = await response.json();
-                console.log('Screener response:', data);
-
-                if (data.success) {
-                    // New API structure: data.data contains {basket, snapshot_id, performance}
-                    const result = data.data;
-                    console.log('Result object:', result);
-
-                    // Extract basket - handle both new and old structures
-                    const basket = result.basket || result.data || result;
-                    console.log('Basket object:', basket);
-
-                    if (!basket || !basket.take_profit) {
-                        console.error('Invalid basket structure:', basket);
-                        showError('Invalid data structure received from server');
-                        return;
-                    }
-
-                    displayResults(basket, result.performance || {});
-                    await loadActivityLog();
-                    await loadPortfolioStats();
-                    console.log('Screener completed successfully');
-                } else {
-                    showError(data.error || 'Unknown error');
-                }
-            } catch (err) {
-                console.error('Screener error:', err);
-                showError('Connection error: ' + err.message);
-            } finally {
-                button.disabled = false;
-                button.textContent = 'Run Screener Now';
-                loading.style.display = 'none';
-            }
-        }
-
         // ========================================
         // ACTIVITY LOG
         // ========================================
@@ -893,12 +829,12 @@
 
         function formatActionType(actionType) {
             const types = {
-                'BUY': 'BUY Signal',
-                'SELL': 'SELL Signal',
-                'HOLD': 'HOLD Decision',
+                'BUY': 'BUY',
+                'SELL': 'SELL',
+                'HOLD': 'HOLD',
                 'REBALANCE': 'Rebalance',
-                'SCAN': 'Portfolio Scanned',
-                'INIT': 'Portfolio Initialized'
+                'SCAN': 'Scan',
+                'INIT': 'Init'
             };
             return types[actionType] || actionType;
         }
@@ -1239,42 +1175,6 @@
         // ========================================
         // CSV EXPORT
         // ========================================
-        function exportCSV() {
-            console.log('Exporting portfolio to CSV...');
-            fetch('/api/portfolio/latest')
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        const portfolio = data.data;
-
-                        // Create CSV content
-                        let csv = 'Category,Position,Ticker\n';
-
-                        portfolio.take_profit.forEach((ticker, i) => {
-                            csv += `Take Profit,${i + 1},${ticker}\n`;
-                        });
-
-                        portfolio.hold.forEach((ticker, i) => {
-                            csv += `Hold,${i + 4},${ticker}\n`;
-                        });
-
-                        portfolio.buffer.forEach((ticker, i) => {
-                            csv += `Buffer,${i + 14},${ticker}\n`;
-                        });
-
-                        // Download CSV
-                        const blob = new Blob([csv], { type: 'text/csv' });
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `portfolio_${new Date().toISOString().split('T')[0]}.csv`;
-                        a.click();
-                        window.URL.revokeObjectURL(url);
-                    }
-                })
-                .catch(err => console.error('Export error:', err));
-        }
-
         // ========================================
         // SETTINGS MANAGEMENT
         // ========================================

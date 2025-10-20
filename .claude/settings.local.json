@@ -1,9 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python check_january_universe.py)",
-      "WebSearch",
-      "Bash(git add -A)"
+      "Bash(python -c \"\nimport sqlite3\nconn = sqlite3.connect(''portfolio.db'')\ncursor = conn.cursor()\n\ncursor.execute(''SELECT COUNT(*) FROM portfolio_snapshots'')\nsnapshots = cursor.fetchone()[0]\n\ncursor.execute(''SELECT COUNT(*) FROM activity_log'')\nlogs = cursor.fetchone()[0]\n\ncursor.execute(''SELECT COUNT(*) FROM trades'')\ntrades = cursor.fetchone()[0]\n\ncursor.execute(''SELECT COUNT(*) FROM sold_positions'')\nsold = cursor.fetchone()[0]\n\nprint(''Database Status:'')\nprint(f''  Snapshots: {snapshots}'')\nprint(f''  Activity Logs: {logs}'')\nprint(f''  Trades: {trades}'')\nprint(f''  Sold Positions: {sold}'')\nprint()\nif snapshots == 0 and logs == 0 and trades == 0 and sold == 0:\n    print(''OK - Database is clean and ready for production'')\nelse:\n    print(''WARNING - Database has data!'')\n\nconn.close()\n\")"
     ],
     "deny": [],
     "ask": []

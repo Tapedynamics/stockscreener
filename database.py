@@ -113,6 +113,26 @@ class Database:
             )
         ''')
 
+        # Trade execution tracking (detailed order tickets)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS trades (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                ticker TEXT NOT NULL,
+                company_name TEXT,
+                action TEXT NOT NULL,
+                rank INTEGER,
+                price REAL NOT NULL,
+                shares REAL NOT NULL,
+                capital_allocated REAL NOT NULL,
+                total_cost REAL NOT NULL,
+                cash_remaining REAL,
+                status TEXT DEFAULT 'FILLED',
+                strategy_note TEXT,
+                metadata TEXT
+            )
+        ''')
+
         # Create indexes for performance
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_portfolio_timestamp
@@ -137,6 +157,16 @@ class Database:
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_sold_ticker_date
             ON sold_positions(ticker, sold_date DESC)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_trades_timestamp
+            ON trades(timestamp DESC)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_trades_ticker
+            ON trades(ticker, timestamp DESC)
         ''')
 
         conn.commit()
@@ -685,6 +715,109 @@ class Database:
             return False, f"New snapshots can only be created after 18:00 (current time: {now.strftime('%H:%M')})"
 
         return True, "OK - Can create new weekly snapshot"
+
+    def record_trade(self, ticker: str, action: str, price: float, shares: float,
+                     capital_allocated: float, rank: int = None, company_name: str = None,
+                     strategy_note: str = None, metadata: Dict = None) -> int:
+        """Record a trade execution
+
+        Args:
+            ticker: Stock ticker
+            action: 'BUY' or 'SELL'
+            price: Execution price per share
+            shares: Number of shares
+            capital_allocated: Capital allocated for this trade
+            rank: Rank in screener (if applicable)
+            company_name: Company full name
+            strategy_note: Note about strategy
+            metadata: Additional metadata dict
+
+        Returns:
+            Trade ID
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        total_cost = price * shares
+        cash_remaining = capital_allocated - total_cost
+
+        cursor.execute('''
+            INSERT INTO trades
+            (ticker, company_name, action, rank, price, shares, capital_allocated,
+             total_cost, cash_remaining, status, strategy_note, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            ticker,
+            company_name,
+            action,
+            rank,
+            price,
+            shares,
+            capital_allocated,
+            total_cost,
+            cash_remaining,
+            'FILLED',
+            strategy_note,
+            json.dumps(metadata) if metadata else None
+        ))
+
+        trade_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        logger.info(f"Trade recorded: {action} {shares:.2f} shares of {ticker} @ ${price:.2f}")
+        return trade_id
+
+    def get_trades(self, limit: int = 50, ticker: str = None) -> List[Dict[str, Any]]:
+        """Get trade history
+
+        Args:
+            limit: Max number of trades to return
+            ticker: Filter by ticker (optional)
+
+        Returns:
+            List of trade dicts
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        if ticker:
+            cursor.execute('''
+                SELECT * FROM trades
+                WHERE ticker = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            ''', (ticker, limit))
+        else:
+            cursor.execute('''
+                SELECT * FROM trades
+                ORDER BY timestamp DESC
+                LIMIT ?
+            ''', (limit,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        trades = []
+        for row in rows:
+            trades.append({
+                'id': row['id'],
+                'timestamp': row['timestamp'],
+                'ticker': row['ticker'],
+                'company_name': row['company_name'],
+                'action': row['action'],
+                'rank': row['rank'],
+                'price': row['price'],
+                'shares': row['shares'],
+                'capital_allocated': row['capital_allocated'],
+                'total_cost': row['total_cost'],
+                'cash_remaining': row['cash_remaining'],
+                'status': row['status'],
+                'strategy_note': row['strategy_note'],
+                'metadata': json.loads(row['metadata']) if row['metadata'] else None
+            })
+
+        return trades
 
 
 # Convenience function

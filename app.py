@@ -26,7 +26,6 @@ from constants import (
 )
 import atexit
 from dotenv import load_dotenv
-from populate_history_endpoint import history_bp
 
 # Load environment variables
 load_dotenv()
@@ -40,9 +39,6 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
-
-# Register blueprints
-app.register_blueprint(history_bp)
 
 # URL del tuo screener Finviz (from environment or default)
 FINVIZ_URL = os.getenv(
@@ -291,6 +287,222 @@ def calculate_real_portfolio_value(tickers: list, initial_investment: float = 15
         return initial_investment
 
 
+def format_trade_ticket(trade: Dict) -> str:
+    """Format trade as a readable ticket"""
+    action_emoji = "🟢" if trade['action'] == 'BUY' else "🔴"
+    status_emoji = "✅" if trade['status'] == 'FILLED' else "⏳"
+
+    ticket = f"""
+╔═══════════════════════════════════════════════════════════╗
+║     {action_emoji} {trade['action']} ORDER #{trade['id']:03d} - {status_emoji} {trade['status']}
+╠═══════════════════════════════════════════════════════════╣
+║ Date/Time:  {trade['timestamp']}
+║ Ticker:     {trade['ticker']}
+║ Company:    {trade['company_name'] or 'N/A'}
+║ Rank:       #{trade['rank'] if trade['rank'] else 'N/A'}
+╠═══════════════════════════════════════════════════════════╣
+║ Price:      ${trade['price']:.2f} per share
+║ Shares:     {trade['shares']:.4f}
+║ Capital:    ${trade['capital_allocated']:,.2f}
+║ Total Cost: ${trade['total_cost']:,.2f}
+║ Cash Left:  ${trade['cash_remaining']:.2f}
+╠═══════════════════════════════════════════════════════════╣
+║ Strategy:   {trade['strategy_note'] or 'N/A'}
+╚═══════════════════════════════════════════════════════════╝
+"""
+    return ticket
+
+
+def execute_trade(ticker: str, action: str, capital: float, rank: int, strategy_note: str, db) -> Dict[str, Any]:
+    """
+    Execute a trade with real-time price from Yahoo Finance
+
+    Args:
+        ticker: Stock ticker
+        action: 'BUY' or 'SELL'
+        capital: Capital allocated for trade
+        rank: Rank in screener
+        strategy_note: Strategy note
+        db: Database instance
+
+    Returns:
+        Dict with trade details
+    """
+    try:
+        # Fetch real-time price from Yahoo Finance
+        stock = yf.Ticker(ticker)
+        info = stock.info
+
+        # Get current price (try multiple fields)
+        price = info.get('currentPrice') or info.get('regularMarketPrice') or info.get('ask')
+
+        if not price:
+            # Fallback: get latest close price
+            hist = stock.history(period='1d')
+            if not hist.empty:
+                price = float(hist['Close'].iloc[-1])
+            else:
+                logger.error(f"Could not fetch price for {ticker}")
+                return {'success': False, 'error': f'Price not available for {ticker}'}
+
+        # Get company name
+        company_name = info.get('shortName') or info.get('longName') or ticker
+
+        # Calculate shares
+        shares = capital / price
+
+        # Record trade in database
+        trade_id = db.record_trade(
+            ticker=ticker,
+            action=action,
+            price=price,
+            shares=shares,
+            capital_allocated=capital,
+            rank=rank,
+            company_name=company_name,
+            strategy_note=strategy_note,
+            metadata={'source': 'yahoo_finance'}
+        )
+
+        # Log to activity log with clean format: "Bought AAPL @$182.45"
+        action_text = "Bought" if action == "BUY" else "Sold"
+        db.add_activity_log(
+            action_type=action,
+            description=f"{action_text} {ticker} @${price:.2f}",
+            ticker=ticker,
+            metadata={
+                'price': price,
+                'shares': shares,
+                'total_cost': shares * price,
+                'rank': rank,
+                'trade_id': trade_id
+            }
+        )
+
+        logger.info(f"✅ {action} executed: {ticker} - {shares:.2f} shares @ ${price:.2f} = ${shares * price:.2f}")
+
+        return {
+            'success': True,
+            'trade_id': trade_id,
+            'ticker': ticker,
+            'company_name': company_name,
+            'action': action,
+            'price': price,
+            'shares': shares,
+            'total_cost': shares * price,
+            'cash_remaining': capital - (shares * price)
+        }
+
+    except Exception as e:
+        logger.error(f"Error executing trade for {ticker}: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+def calculate_weekly_rotation(current_holdings: List[str], screener_results: Dict, db) -> Dict[str, Any]:
+    """
+    Calculate weekly rotation based on new strategy:
+    - Ranks 1-3 (TP): If CORE stock moves here → SELL (take profit)
+    - Ranks 4-13 (CORE): Active positions
+    - Ranks 14-15 (BUFFER): Ex-CORE stocks (maintain position, penchina)
+    - Out of top 15: SELL
+    - Re-entry: Only after 2 weeks cooldown + rank 9-13
+
+    Args:
+        current_holdings: List of currently owned tickers
+        screener_results: Dict with {take_profit: [], hold: [], buffer: []}
+        db: Database instance
+
+    Returns:
+        Dict with rotation actions
+    """
+    # Get all screened stocks with ranks
+    screener_stocks = screener_results['take_profit'] + screener_results['hold'] + screener_results['buffer']
+
+    # Assign ranks
+    stock_ranks = {}
+    for i, ticker in enumerate(screener_stocks, start=1):
+        stock_ranks[ticker] = i
+
+    to_sell = []
+    to_buy = []
+    to_buffer = []  # Stocks moving to panchina
+
+    # Check each current holding
+    for ticker in current_holdings:
+        if ticker not in stock_ranks:
+            # Stock dropped out of top 15 → SELL
+            to_sell.append({
+                'ticker': ticker,
+                'reason': 'drop_out',
+                'rank': None,
+                'action': 'SELL - Dropped out of top 15'
+            })
+            continue
+
+        rank = stock_ranks[ticker]
+
+        if rank <= 3:
+            # Moved to TAKE PROFIT zone → SELL
+            to_sell.append({
+                'ticker': ticker,
+                'reason': 'top_3',
+                'rank': rank,
+                'action': 'SELL - Take Profit (moved to top 3)'
+            })
+        elif rank >= 14:
+            # Moved to BUFFER zone (panchina) → MAINTAIN
+            to_buffer.append({
+                'ticker': ticker,
+                'rank': rank,
+                'action': 'BUFFER - Maintain position (panchina)'
+            })
+        # else: rank 4-13 → stay in CORE, no action needed
+
+    # Calculate available slots
+    target_size = 12
+    holdings_after_sells = [t for t in current_holdings if t not in [s['ticker'] for s in to_sell]]
+    slots_available = target_size - len(holdings_after_sells)
+
+    logger.info(f"Rotation: {len(holdings_after_sells)} holdings after sells, {slots_available} slots available")
+
+    # Find candidates to buy (CORE zone, ranks 4-13)
+    buy_candidates = []
+    for ticker in screener_results['hold']:  # Ranks 4-13
+        if ticker in holdings_after_sells:
+            continue  # Already holding
+
+        rank = stock_ranks[ticker]
+
+        # Check re-entry rules
+        allowed, reason = db.check_reentry_allowed(ticker, rank)
+
+        if allowed:
+            buy_candidates.append({
+                'ticker': ticker,
+                'rank': rank,
+                'reentry_status': reason
+            })
+        else:
+            logger.debug(f"Skip {ticker}: {reason}")
+
+    # Sort by rank (prefer lower ranks, but avoid top 3)
+    buy_candidates.sort(key=lambda x: x['rank'])
+
+    # Take top N candidates to fill slots
+    to_buy = buy_candidates[:slots_available]
+
+    logger.info(f"Rotation: Selling {len(to_sell)}, Buying {len(to_buy)}, Buffer {len(to_buffer)}")
+
+    return {
+        'to_sell': to_sell,
+        'to_buy': to_buy,
+        'to_buffer': to_buffer,
+        'slots_available': slots_available,
+        'current_holdings': current_holdings,
+        'holdings_after': holdings_after_sells
+    }
+
+
 def calculate_rotation_trades(current_portfolio: Dict, all_tickers: List[str], portfolio_size: int = 12) -> Dict[str, Any]:
     """
     Calculate momentum rotation trade suggestions
@@ -431,46 +643,135 @@ def automated_screener_job():
         # Get previous portfolio
         previous_portfolio = db.get_latest_portfolio()
 
+        # Calculate portfolio value
+        initial_value = float(db.get_setting('initial_value', '150000'))
+        target_portfolio_size = 12
+        is_first_run = (previous_portfolio is None)
+
+        if is_first_run:
+            # First order: only 10 CORE stocks
+            active_tickers = basket['hold']
+            capital_per_stock = initial_value / target_portfolio_size
+            logger.info(f"AUTOMATED FIRST RUN: Buying {len(active_tickers)} CORE @ ${capital_per_stock:,.0f} each")
+
+            # Execute BUY trades
+            for i, ticker in enumerate(active_tickers, start=4):
+                execute_trade(
+                    ticker=ticker,
+                    action='BUY',
+                    capital=capital_per_stock,
+                    rank=i,
+                    strategy_note='🤖 Automated First Order - Week 1',
+                    db=db
+                )
+
+            rotation_result = None
+        else:
+            # Subsequent runs: weekly rotation
+            current_holdings = previous_portfolio['hold']
+            capital_per_stock = initial_value / target_portfolio_size
+
+            rotation_result = calculate_weekly_rotation(current_holdings, basket, db)
+
+            # Execute SELL trades
+            for sell in rotation_result['to_sell']:
+                execute_trade(
+                    ticker=sell['ticker'],
+                    action='SELL',
+                    capital=capital_per_stock,
+                    rank=sell.get('rank'),
+                    strategy_note=f"🤖 Automated Rotation - {sell['reason']}",
+                    db=db
+                )
+                db.record_sale(sell['ticker'], sell['reason'], sell.get('rank'))
+                logger.info(f"🤖 SELL: {sell['ticker']} - {sell['action']}")
+
+            # Execute BUY trades
+            for buy in rotation_result['to_buy']:
+                execute_trade(
+                    ticker=buy['ticker'],
+                    action='BUY',
+                    capital=capital_per_stock,
+                    rank=buy['rank'],
+                    strategy_note=f"🤖 Automated Rotation - Re-entry rank {buy['rank']}",
+                    db=db
+                )
+                db.mark_rebought(buy['ticker'])
+                logger.info(f"🤖 BUY: {buy['ticker']} (rank {buy['rank']})")
+
+            active_tickers = rotation_result['holdings_after'] + [b['ticker'] for b in rotation_result['to_buy']]
+            logger.info(f"🤖 ROTATION: {len(active_tickers)} active, {len(rotation_result['to_buffer'])} buffer")
+
+        portfolio_value = calculate_real_portfolio_value(active_tickers, capital_per_stock * len(active_tickers))
+
+        # Prepare snapshot
+        if is_first_run:
+            snapshot_tp = basket['take_profit']
+            snapshot_hold = active_tickers
+            snapshot_buffer = []
+        else:
+            snapshot_tp = basket['take_profit']
+            snapshot_hold = active_tickers
+            snapshot_buffer = [b['ticker'] for b in rotation_result['to_buffer']]
+
         # Save snapshot
         snapshot_id = db.save_portfolio_snapshot(
-            basket['take_profit'],
-            basket['hold'],
-            basket['buffer'],
-            notes='Automated weekly rebalance'
+            snapshot_tp,
+            snapshot_hold,
+            snapshot_buffer,
+            notes='Automated weekly rebalance' if not is_first_run else 'Automated first order',
+            portfolio_value=portfolio_value
         )
 
-        # Compare and log changes
+        # Log changes
         if previous_portfolio:
-            changes = db.compare_portfolios(basket, previous_portfolio)
+            if rotation_result:
+                # Log rotation actions
+                for sell in rotation_result['to_sell']:
+                    db.add_activity_log(
+                        'SELL',
+                        f"🤖 {sell['ticker']} - {sell['action']}",
+                        ticker=sell['ticker'],
+                        metadata={'reason': sell['reason'], 'rank': sell.get('rank'), 'automated': True}
+                    )
 
-            if changes['added']:
-                db.add_activity_log(
-                    'BUY',
-                    f"🤖 AI Agent: Added {len(changes['added'])} new positions: {', '.join(changes['added'][:3])}{'...' if len(changes['added']) > 3 else ''}",
-                    metadata={'tickers': changes['added'], 'automated': True}
-                )
+                for buy in rotation_result['to_buy']:
+                    db.add_activity_log(
+                        'BUY',
+                        f"🤖 {buy['ticker']} - New CORE position (rank {buy['rank']})",
+                        ticker=buy['ticker'],
+                        metadata={'rank': buy['rank'], 'automated': True}
+                    )
 
-            if changes['removed']:
-                db.add_activity_log(
-                    'SELL',
-                    f"🤖 AI Agent: Removed {len(changes['removed'])} positions: {', '.join(changes['removed'][:3])}{'...' if len(changes['removed']) > 3 else ''}",
-                    metadata={'tickers': changes['removed'], 'automated': True}
-                )
+                for buffer_stock in rotation_result['to_buffer']:
+                    db.add_activity_log(
+                        'REBALANCE',
+                        f"🤖 {buffer_stock['ticker']} - Moved to BUFFER (rank {buffer_stock['rank']})",
+                        ticker=buffer_stock['ticker'],
+                        metadata={'rank': buffer_stock['rank'], 'automated': True}
+                    )
 
-            for move in changes['moved']:
-                db.add_activity_log(
-                    'REBALANCE',
-                    f"🤖 AI Agent: {move['ticker']} moved from {move['from']} to {move['to']}",
-                    ticker=move['ticker'],
-                    metadata={**move, 'automated': True}
-                )
-
-            if not changes['added'] and not changes['removed'] and not changes['moved']:
-                db.add_activity_log(
-                    'HOLD',
-                    '🤖 AI Agent: Automated rebalance - No changes needed, all positions maintained',
-                    metadata={'automated': True}
-                )
+                if not rotation_result['to_sell'] and not rotation_result['to_buy'] and not rotation_result['to_buffer']:
+                    db.add_activity_log(
+                        'HOLD',
+                        '🤖 AI Agent: Automated rotation - No changes needed',
+                        metadata={'automated': True}
+                    )
+        else:
+            # First automated run
+            core_tickers = basket['hold']
+            deployed_capital = capital_per_stock * len(core_tickers)
+            db.add_activity_log(
+                'BUY',
+                f'🤖 AUTOMATED FIRST ORDER: Buying {len(core_tickers)} CORE positions @ ${capital_per_stock:,.0f} each',
+                metadata={
+                    'tickers': core_tickers,
+                    'type': 'automated_initial_order',
+                    'count': len(core_tickers),
+                    'capital_per_stock': capital_per_stock,
+                    'automated': True
+                }
+            )
 
         # Always log the automated scan
         db.add_activity_log(
@@ -482,7 +783,8 @@ def automated_screener_job():
         return {
             'success': True,
             'total_stocks': basket['total_found'],
-            'snapshot_id': snapshot_id
+            'snapshot_id': snapshot_id,
+            'portfolio_value': portfolio_value
         }
 
     except Exception as e:
@@ -558,18 +860,98 @@ def run_screener():
 
         # Calculate portfolio value
         initial_value = float(db.get_setting('initial_value', '150000'))
-        all_tickers = basket['take_profit'] + basket['hold'] + basket['buffer']
-        new_portfolio_value = calculate_real_portfolio_value(all_tickers, initial_value)
+        target_portfolio_size = 12  # Target: 12 stocks total
+
+        # FIRST RUN: Only buy CORE positions (hold = positions 4-13)
+        # Capital per stock = $150,000 / 12 = $12,500
+        # Week 1: Buy 10 CORE = $125,000 deployed
+        # Week 2: Rotation cycle to reach 12 stocks
+        is_first_run = (previous_portfolio is None)
+
+        if is_first_run:
+            # First order: only 10 CORE stocks
+            active_tickers = basket['hold']  # Positions 4-13
+            capital_per_stock = initial_value / target_portfolio_size  # $12,500 each
+            logger.info(f"FIRST RUN: Buying {len(active_tickers)} CORE positions @ ${capital_per_stock:,.0f} each")
+
+            # Execute BUY trades for each CORE position
+            trade_results = []
+            for i, ticker in enumerate(active_tickers, start=4):  # Ranks 4-13
+                trade = execute_trade(
+                    ticker=ticker,
+                    action='BUY',
+                    capital=capital_per_stock,
+                    rank=i,
+                    strategy_note='First Order - Week 1 CORE',
+                    db=db
+                )
+                trade_results.append(trade)
+
+            rotation_result = None
+        else:
+            # Subsequent runs: weekly rotation strategy
+            current_holdings = previous_portfolio['hold']  # Currently owned stocks
+            capital_per_stock = initial_value / target_portfolio_size
+
+            # Calculate rotation (sells, buys, buffer movements)
+            rotation_result = calculate_weekly_rotation(current_holdings, basket, db)
+
+            # Execute SELL trades
+            for sell in rotation_result['to_sell']:
+                # Get current shares owned (would need position tracking, for now use capital)
+                trade = execute_trade(
+                    ticker=sell['ticker'],
+                    action='SELL',
+                    capital=capital_per_stock,  # Selling full position
+                    rank=sell.get('rank'),
+                    strategy_note=f"Rotation - {sell['reason']}",
+                    db=db
+                )
+                db.record_sale(sell['ticker'], sell['reason'], sell.get('rank'))
+                logger.info(f"SELL: {sell['ticker']} - {sell['action']}")
+
+            # Execute BUY trades
+            for buy in rotation_result['to_buy']:
+                trade = execute_trade(
+                    ticker=buy['ticker'],
+                    action='BUY',
+                    capital=capital_per_stock,
+                    rank=buy['rank'],
+                    strategy_note=f"Rotation - Re-entry rank {buy['rank']}",
+                    db=db
+                )
+                db.mark_rebought(buy['ticker'])
+                logger.info(f"BUY: {buy['ticker']} (rank {buy['rank']})")
+
+            # Active tickers after rotation
+            active_tickers = rotation_result['holdings_after'] + [b['ticker'] for b in rotation_result['to_buy']]
+
+            logger.info(f"ROTATION COMPLETE: {len(active_tickers)} stocks active, {len(rotation_result['to_buffer'])} in buffer")
+
+        # Calculate value only for active positions
+        new_portfolio_value = calculate_real_portfolio_value(active_tickers, capital_per_stock * len(active_tickers))
 
         snapshot_id = None
+
+        # Prepare snapshot data based on actual ownership
+        if is_first_run:
+            # First run: save CORE as owned, TP and Buffer are screener references
+            snapshot_tp = basket['take_profit']
+            snapshot_hold = active_tickers  # 10 CORE stocks we bought
+            snapshot_buffer = []  # No buffer yet
+        else:
+            # Subsequent runs: reflect actual ownership and buffer
+            snapshot_tp = basket['take_profit']  # Screener top 3 (for reference)
+            snapshot_hold = active_tickers  # Stocks we currently own
+            snapshot_buffer = [b['ticker'] for b in rotation_result['to_buffer']]  # Stocks in panchina
 
         if can_create:
             # Create new weekly snapshot
             snapshot_id = db.save_portfolio_snapshot(
-                basket['take_profit'],
-                basket['hold'],
-                basket['buffer'],
-                notes='Weekly portfolio rotation (Monday)',
+                snapshot_tp,
+                snapshot_hold,
+                snapshot_buffer,
+                notes='Weekly portfolio rotation (Monday)' if not is_first_run else 'First order - 10 CORE positions',
                 portfolio_value=new_portfolio_value,
                 is_locked=False  # New snapshots start unlocked, can be updated during the week
             )
@@ -593,45 +975,77 @@ def run_screener():
 
         # Compare portfolios and log changes
         if previous_portfolio:
-            changes = db.compare_portfolios(basket, previous_portfolio)
+            if rotation_result:
+                # Log rotation-based changes
+                for sell in rotation_result['to_sell']:
+                    db.add_activity_log(
+                        'SELL',
+                        f"{sell['ticker']} - {sell['action']}",
+                        ticker=sell['ticker'],
+                        metadata={'reason': sell['reason'], 'rank': sell.get('rank')}
+                    )
 
-            # Log additions
-            if changes['added']:
-                db.add_activity_log(
-                    'BUY',
-                    f"Added {len(changes['added'])} new positions: {', '.join(changes['added'][:3])}{'...' if len(changes['added']) > 3 else ''}",
-                    metadata={'tickers': changes['added']}
-                )
+                for buy in rotation_result['to_buy']:
+                    db.add_activity_log(
+                        'BUY',
+                        f"{buy['ticker']} - New CORE position (rank {buy['rank']})",
+                        ticker=buy['ticker'],
+                        metadata={'rank': buy['rank'], 'reentry': buy['reentry_status']}
+                    )
 
-            # Log removals
-            if changes['removed']:
-                db.add_activity_log(
-                    'SELL',
-                    f"Removed {len(changes['removed'])} positions: {', '.join(changes['removed'][:3])}{'...' if len(changes['removed']) > 3 else ''}",
-                    metadata={'tickers': changes['removed']}
-                )
+                for buffer_stock in rotation_result['to_buffer']:
+                    db.add_activity_log(
+                        'REBALANCE',
+                        f"{buffer_stock['ticker']} - Moved to BUFFER (panchina, rank {buffer_stock['rank']})",
+                        ticker=buffer_stock['ticker'],
+                        metadata={'rank': buffer_stock['rank']}
+                    )
 
-            # Log position changes
-            for move in changes['moved']:
-                db.add_activity_log(
-                    'REBALANCE',
-                    f"{move['ticker']} moved from {move['from']} to {move['to']}",
-                    ticker=move['ticker'],
-                    metadata=move
-                )
-
-            # Log if no changes
-            if not changes['added'] and not changes['removed'] and not changes['moved']:
-                db.add_activity_log(
-                    'HOLD',
-                    'Portfolio maintained - All stocks still meet quality criteria'
-                )
+                # Summary log
+                if not rotation_result['to_sell'] and not rotation_result['to_buy'] and not rotation_result['to_buffer']:
+                    db.add_activity_log(
+                        'HOLD',
+                        f'Weekly rotation - No changes needed, {len(active_tickers)} positions maintained'
+                    )
+                else:
+                    db.add_activity_log(
+                        'REBALANCE',
+                        f'Weekly rotation complete - Sold: {len(rotation_result["to_sell"])}, Bought: {len(rotation_result["to_buy"])}, Buffer: {len(rotation_result["to_buffer"])}',
+                        metadata={
+                            'sells': len(rotation_result['to_sell']),
+                            'buys': len(rotation_result['to_buy']),
+                            'buffer_moves': len(rotation_result['to_buffer']),
+                            'final_size': len(active_tickers)
+                        }
+                    )
         else:
-            # First run
+            # First run - buying only CORE positions
+            core_tickers = basket['hold']
+            capital_per_stock = initial_value / target_portfolio_size
+            deployed_capital = capital_per_stock * len(core_tickers)
+
+            db.add_activity_log(
+                'BUY',
+                f'FIRST ORDER: Buying {len(core_tickers)} CORE positions (ranks 4-13) @ ${capital_per_stock:,.0f} each = ${deployed_capital:,.0f} total',
+                metadata={
+                    'tickers': core_tickers,
+                    'type': 'initial_order',
+                    'count': len(core_tickers),
+                    'capital_per_stock': capital_per_stock,
+                    'deployed_capital': deployed_capital,
+                    'reserved_capital': initial_value - deployed_capital
+                }
+            )
             db.add_activity_log(
                 'INIT',
-                f'Initial portfolio created with {basket["total_found"]} stocks',
-                metadata={'count': basket['total_found']}
+                f'Portfolio initialized - Target: {target_portfolio_size} stocks | Week 1: {len(core_tickers)} CORE bought | Reserved: ${(initial_value - deployed_capital):,.0f}',
+                metadata={
+                    'total_found': basket['total_found'],
+                    'target_size': target_portfolio_size,
+                    'core_bought': len(core_tickers),
+                    'tp_reserved': len(basket['take_profit']),
+                    'buffer_reserved': len(basket['buffer'])
+                }
             )
 
         # Always log the scan
@@ -672,6 +1086,51 @@ def get_activity_log():
 
     except Exception as e:
         logger.error(f"Error in get_activity_log: {e}")
+        return api_error(str(e), 500)
+
+
+@app.route('/api/trades', methods=['GET'])
+def get_trades_api():
+    """Get trade history (order tickets)"""
+    try:
+        db = get_db()
+        limit = request.args.get('limit', 50, type=int)
+        ticker = request.args.get('ticker', None, type=str)
+
+        trades = db.get_trades(limit=limit, ticker=ticker)
+
+        return api_success({
+            'trades': trades,
+            'count': len(trades)
+        })
+
+    except Exception as e:
+        logger.error(f"Error fetching trades: {e}")
+        return api_error(str(e), 500)
+
+
+@app.route('/api/trades/<int:trade_id>', methods=['GET'])
+def get_trade_ticket(trade_id):
+    """Get detailed trade ticket"""
+    try:
+        db = get_db()
+        trades = db.get_trades(limit=1000)  # Get all and filter
+
+        trade = next((t for t in trades if t['id'] == trade_id), None)
+
+        if not trade:
+            return api_error('Trade not found', 404)
+
+        # Format trade ticket
+        ticket = format_trade_ticket(trade)
+
+        return api_success({
+            'trade': trade,
+            'ticket': ticket
+        })
+
+    except Exception as e:
+        logger.error(f"Error fetching trade ticket: {e}")
         return api_error(str(e), 500)
 
 
@@ -1058,7 +1517,20 @@ def init_scheduler():
         return
 
     try:
-        portfolio_scheduler = create_scheduler(automated_screener_job)
+        # Check if database is empty (first ever run)
+        db = get_db()
+        history = db.get_portfolio_history(limit=1)
+        is_first_ever_run = (len(history) == 0)
+
+        # If first run, schedule for today at 19:00
+        portfolio_scheduler = create_scheduler(
+            automated_screener_job,
+            run_today_at_19=is_first_ever_run
+        )
+
+        if is_first_ever_run:
+            logger.info("🎯 FIRST ORDER will run TODAY at 19:00 CET")
+
         logger.info("✅ Automated scheduler initialized - Weekly rebalance at Monday 19:00 CET")
 
         # Register shutdown handler
@@ -1070,22 +1542,9 @@ def init_scheduler():
 
 def check_and_populate_history():
     """Check if database is empty and populate with historical data"""
-    try:
-        db = get_db()
-        snapshots = db.get_portfolio_history(limit=5)
-
-        if len(snapshots) < 5:
-            logger.info("Database has few snapshots, generating historical data...")
-
-            # Import and run the generator
-            try:
-                from generate_history import generate_historical_data
-                generate_historical_data()
-                logger.info("Historical data generated successfully!")
-            except Exception as e:
-                logger.error(f"Error generating historical data: {e}")
-    except Exception as e:
-        logger.error(f"Error checking database: {e}")
+    # DISABLED: We're starting fresh with real trades
+    # Only use this for testing/demo purposes
+    pass
 
 
 @app.route('/api/rotation/suggest', methods=['GET'])
