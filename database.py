@@ -143,7 +143,7 @@ class Database:
         conn.close()
         logger.info("Database initialized successfully")
 
-    def save_portfolio_snapshot(self, take_profit, hold, buffer, notes=None, portfolio_value=None, is_locked=False):
+    def save_portfolio_snapshot(self, take_profit, hold, buffer, notes=None, portfolio_value=None, is_locked=False, timestamp=None):
         """Save a portfolio snapshot
 
         Args:
@@ -153,23 +153,49 @@ class Database:
             notes: Optional notes
             portfolio_value: Portfolio value in dollars
             is_locked: If True, snapshot cannot be modified/deleted (for historical data)
+            timestamp: Optional timestamp (datetime object or ISO string). If None, uses current time
         """
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        cursor.execute('''
-            INSERT INTO portfolio_snapshots
-            (take_profit, hold, buffer, total_stocks, portfolio_value, notes, is_locked)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            json.dumps(take_profit),
-            json.dumps(hold),
-            json.dumps(buffer),
-            len(take_profit) + len(hold) + len(buffer),
-            portfolio_value,
-            notes,
-            1 if is_locked else 0
-        ))
+        if timestamp:
+            # Custom timestamp provided (for historical data)
+            if hasattr(timestamp, 'isoformat'):
+                # It's a datetime object
+                timestamp_str = timestamp.isoformat()
+            else:
+                # It's already a string
+                timestamp_str = timestamp
+
+            cursor.execute('''
+                INSERT INTO portfolio_snapshots
+                (timestamp, take_profit, hold, buffer, total_stocks, portfolio_value, notes, is_locked)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                timestamp_str,
+                json.dumps(take_profit),
+                json.dumps(hold),
+                json.dumps(buffer),
+                len(take_profit) + len(hold) + len(buffer),
+                portfolio_value,
+                notes,
+                1 if is_locked else 0
+            ))
+        else:
+            # Use default CURRENT_TIMESTAMP
+            cursor.execute('''
+                INSERT INTO portfolio_snapshots
+                (take_profit, hold, buffer, total_stocks, portfolio_value, notes, is_locked)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                json.dumps(take_profit),
+                json.dumps(hold),
+                json.dumps(buffer),
+                len(take_profit) + len(hold) + len(buffer),
+                portfolio_value,
+                notes,
+                1 if is_locked else 0
+            ))
 
         snapshot_id = cursor.lastrowid
         conn.commit()

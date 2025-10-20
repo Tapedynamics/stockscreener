@@ -124,7 +124,8 @@ def populate_database_from_backtest():
                 buffer=portfolio[10:] if len(portfolio) > 10 else [],
                 notes=f'Week {week_num}: Initial portfolio ({len(portfolio)} stocks)',
                 portfolio_value=portfolio_value,
-                is_locked=True
+                is_locked=True,
+                timestamp=date  # Use actual week date (Monday)
             )
 
             snapshots_created += 1
@@ -238,7 +239,8 @@ def populate_database_from_backtest():
                 buffer=portfolio[10:] if len(portfolio) > 10 else [],
                 notes=notes,
                 portfolio_value=portfolio_value,
-                is_locked=True
+                is_locked=True,
+                timestamp=date  # Use actual week date (Monday)
             )
 
             snapshots_created += 1
