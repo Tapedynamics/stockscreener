@@ -622,176 +622,31 @@ def calculate_rotation_trades(current_portfolio: Dict, all_tickers: List[str], p
 def automated_screener_job():
     """
     Automated screener job for scheduler
+    Simply calls the main run_screener endpoint logic
     Returns dict with success status
     """
-    try:
-        db = get_db()
+    logger.info("🤖 Automated screener job triggered by scheduler")
 
-        # Run screener
-        tickers = get_finviz_stocks(FINVIZ_URL)
+    # Call the main screener endpoint (this will handle all logic)
+    # We create a mock request context to call it
+    from flask import Flask
+    with app.test_request_context():
+        try:
+            response = run_screener()
+            # Extract JSON from response
+            if hasattr(response, 'get_json'):
+                result = response.get_json()
+            else:
+                result = response
 
-        if not tickers:
+            logger.info(f"🤖 Automated job completed: {result.get('success', False)}")
+            return result
+        except Exception as e:
+            logger.error(f"🤖 Automated job failed: {str(e)}")
             return {
                 'success': False,
-                'error': 'No tickers found'
+                'error': str(e)
             }
-
-        # Organize basket
-        top_15 = tickers[:15]
-        basket = organize_basket(top_15)
-
-        # Get previous portfolio
-        previous_portfolio = db.get_latest_portfolio()
-
-        # Calculate portfolio value
-        initial_value = float(db.get_setting('initial_value', '150000'))
-        target_portfolio_size = 12
-        is_first_run = (previous_portfolio is None)
-
-        if is_first_run:
-            # First order: only 10 CORE stocks
-            active_tickers = basket['hold']
-            capital_per_stock = initial_value / target_portfolio_size
-            logger.info(f"AUTOMATED FIRST RUN: Buying {len(active_tickers)} CORE @ ${capital_per_stock:,.0f} each")
-
-            # Execute BUY trades
-            for i, ticker in enumerate(active_tickers, start=4):
-                execute_trade(
-                    ticker=ticker,
-                    action='BUY',
-                    capital=capital_per_stock,
-                    rank=i,
-                    strategy_note='🤖 Automated First Order - Week 1',
-                    db=db
-                )
-
-            rotation_result = None
-        else:
-            # Subsequent runs: weekly rotation
-            current_holdings = previous_portfolio['hold']
-            capital_per_stock = initial_value / target_portfolio_size
-
-            rotation_result = calculate_weekly_rotation(current_holdings, basket, db)
-
-            # Execute SELL trades
-            for sell in rotation_result['to_sell']:
-                execute_trade(
-                    ticker=sell['ticker'],
-                    action='SELL',
-                    capital=capital_per_stock,
-                    rank=sell.get('rank'),
-                    strategy_note=f"🤖 Automated Rotation - {sell['reason']}",
-                    db=db
-                )
-                db.record_sale(sell['ticker'], sell['reason'], sell.get('rank'))
-                logger.info(f"🤖 SELL: {sell['ticker']} - {sell['action']}")
-
-            # Execute BUY trades
-            for buy in rotation_result['to_buy']:
-                execute_trade(
-                    ticker=buy['ticker'],
-                    action='BUY',
-                    capital=capital_per_stock,
-                    rank=buy['rank'],
-                    strategy_note=f"🤖 Automated Rotation - Re-entry rank {buy['rank']}",
-                    db=db
-                )
-                db.mark_rebought(buy['ticker'])
-                logger.info(f"🤖 BUY: {buy['ticker']} (rank {buy['rank']})")
-
-            active_tickers = rotation_result['holdings_after'] + [b['ticker'] for b in rotation_result['to_buy']]
-            logger.info(f"🤖 ROTATION: {len(active_tickers)} active, {len(rotation_result['to_buffer'])} buffer")
-
-        portfolio_value = calculate_real_portfolio_value(active_tickers, capital_per_stock * len(active_tickers))
-
-        # Prepare snapshot
-        if is_first_run:
-            snapshot_tp = basket['take_profit']
-            snapshot_hold = active_tickers
-            snapshot_buffer = []
-        else:
-            snapshot_tp = basket['take_profit']
-            snapshot_hold = active_tickers
-            snapshot_buffer = [b['ticker'] for b in rotation_result['to_buffer']]
-
-        # Save snapshot
-        snapshot_id = db.save_portfolio_snapshot(
-            snapshot_tp,
-            snapshot_hold,
-            snapshot_buffer,
-            notes='Automated weekly rebalance' if not is_first_run else 'Automated first order',
-            portfolio_value=portfolio_value
-        )
-
-        # Log changes
-        if previous_portfolio:
-            if rotation_result:
-                # Log rotation actions
-                for sell in rotation_result['to_sell']:
-                    db.add_activity_log(
-                        'SELL',
-                        f"🤖 {sell['ticker']} - {sell['action']}",
-                        ticker=sell['ticker'],
-                        metadata={'reason': sell['reason'], 'rank': sell.get('rank'), 'automated': True}
-                    )
-
-                for buy in rotation_result['to_buy']:
-                    db.add_activity_log(
-                        'BUY',
-                        f"🤖 {buy['ticker']} - New CORE position (rank {buy['rank']})",
-                        ticker=buy['ticker'],
-                        metadata={'rank': buy['rank'], 'automated': True}
-                    )
-
-                for buffer_stock in rotation_result['to_buffer']:
-                    db.add_activity_log(
-                        'REBALANCE',
-                        f"🤖 {buffer_stock['ticker']} - Moved to BUFFER (rank {buffer_stock['rank']})",
-                        ticker=buffer_stock['ticker'],
-                        metadata={'rank': buffer_stock['rank'], 'automated': True}
-                    )
-
-                if not rotation_result['to_sell'] and not rotation_result['to_buy'] and not rotation_result['to_buffer']:
-                    db.add_activity_log(
-                        'HOLD',
-                        '🤖 AI Agent: Automated rotation - No changes needed',
-                        metadata={'automated': True}
-                    )
-        else:
-            # First automated run
-            core_tickers = basket['hold']
-            deployed_capital = capital_per_stock * len(core_tickers)
-            db.add_activity_log(
-                'BUY',
-                f'🤖 AUTOMATED FIRST ORDER: Buying {len(core_tickers)} CORE positions @ ${capital_per_stock:,.0f} each',
-                metadata={
-                    'tickers': core_tickers,
-                    'type': 'automated_initial_order',
-                    'count': len(core_tickers),
-                    'capital_per_stock': capital_per_stock,
-                    'automated': True
-                }
-            )
-
-        # Always log the automated scan
-        db.add_activity_log(
-            'SCAN',
-            f'🤖 AI Agent: Automated weekly scan completed - {basket["total_found"]} stocks identified',
-            metadata={'total': basket['total_found'], 'automated': True}
-        )
-
-        return {
-            'success': True,
-            'total_stocks': basket['total_found'],
-            'snapshot_id': snapshot_id,
-            'portfolio_value': portfolio_value
-        }
-
-    except Exception as e:
-        return {
-            'success': False,
-            'error': str(e)
-        }
 
 
 @app.route('/')
@@ -1086,6 +941,77 @@ def get_activity_log():
 
     except Exception as e:
         logger.error(f"Error in get_activity_log: {e}")
+        return api_error(str(e), 500)
+
+
+@app.route('/api/admin/reset-database', methods=['POST'])
+def reset_database():
+    """
+    ADMIN ENDPOINT: Reset all portfolio data
+    Clears snapshots, trades, activity log, sold positions, stock performance
+    Preserves settings
+    """
+    try:
+        db = get_db()
+
+        # Delete all data (keep settings)
+        conn = db.get_connection()
+        cursor = conn.cursor()
+
+        # Count before deletion
+        cursor.execute('SELECT COUNT(*) FROM portfolio_snapshots')
+        snapshots = cursor.fetchone()[0]
+        cursor.execute('SELECT COUNT(*) FROM activity_log')
+        logs = cursor.fetchone()[0]
+        cursor.execute('SELECT COUNT(*) FROM trades')
+        trades = cursor.fetchone()[0]
+        cursor.execute('SELECT COUNT(*) FROM sold_positions')
+        sold = cursor.fetchone()[0]
+        cursor.execute('SELECT COUNT(*) FROM stock_performance')
+        performance = cursor.fetchone()[0]
+
+        logger.info(f"🗑️  RESET DATABASE - Before: {snapshots} snapshots, {logs} logs, {trades} trades")
+
+        # DELETE ALL DATA (keep settings)
+        cursor.execute('DELETE FROM portfolio_snapshots')
+        cursor.execute('DELETE FROM activity_log')
+        cursor.execute('DELETE FROM stock_performance')
+        cursor.execute('DELETE FROM sold_positions')
+        cursor.execute('DELETE FROM trades')
+
+        # Reset auto-increment counters
+        cursor.execute('DELETE FROM sqlite_sequence WHERE name IN ("portfolio_snapshots", "activity_log", "stock_performance", "sold_positions", "trades")')
+
+        conn.commit()
+
+        # Verify deletion
+        cursor.execute('SELECT COUNT(*) FROM portfolio_snapshots')
+        snapshots_after = cursor.fetchone()[0]
+        cursor.execute('SELECT COUNT(*) FROM activity_log')
+        logs_after = cursor.fetchone()[0]
+        cursor.execute('SELECT COUNT(*) FROM trades')
+        trades_after = cursor.fetchone()[0]
+
+        logger.info(f"✅ DATABASE RESET COMPLETE - After: {snapshots_after} snapshots, {logs_after} logs, {trades_after} trades")
+
+        return api_success({
+            'message': 'Database reset successful',
+            'deleted': {
+                'snapshots': snapshots,
+                'activity_log': logs,
+                'trades': trades,
+                'sold_positions': sold,
+                'stock_performance': performance
+            },
+            'verified': {
+                'snapshots': snapshots_after,
+                'activity_log': logs_after,
+                'trades': trades_after
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error resetting database: {e}")
         return api_error(str(e), 500)
 
 
