@@ -956,28 +956,38 @@
 
         async function loadPortfolioStats() {
             try {
-                const response = await fetch('/api/portfolio/performance');
-                const data = await response.json();
+                // Fetch both trades and performance data
+                const [tradesResponse, perfResponse] = await Promise.all([
+                    fetch('/api/trades?limit=100'),
+                    fetch('/api/portfolio/performance')
+                ]);
 
-                if (data.success) {
-                    updateStatsDisplay(data.data);
+                const tradesData = await tradesResponse.json();
+                const perfData = await perfResponse.json();
+
+                if (tradesData.success && perfData.success) {
+                    updateStatsDisplay(tradesData.data, perfData.data);
                 }
             } catch (err) {
                 console.error('Error loading portfolio stats:', err);
             }
         }
 
-        function updateStatsDisplay(stats) {
-            console.log('Updating stats display:', stats);
+        function updateStatsDisplay(tradesData, perfStats) {
+            console.log('Updating stats display:', tradesData, perfStats);
 
             const initialCapital = 150000;
-            const targetStocks = 12;
-            const capitalPerStock = initialCapital / targetStocks; // $12,500
 
-            // Calculate values
-            const positionsMarketValue = Math.round(stats.total_value || 0);
-            const activeStocks = stats.total_positions || 0;
-            const deployedCapital = activeStocks * capitalPerStock;
+            // Calculate deployed capital from actual BUY trades
+            const buyTrades = tradesData.trades.filter(t => t.action === 'BUY');
+            const deployedCapital = buyTrades.reduce((sum, t) => sum + t.total_cost, 0);
+            const activeBuyCount = buyTrades.length;
+
+            // Get current market value from performance API
+            // If no trades, positions value is 0 (not initial capital)
+            const positionsMarketValue = activeBuyCount > 0 ? Math.round(perfStats.total_value || 0) : 0;
+
+            // Calculate remaining values
             const cashAvailable = initialCapital - deployedCapital;
             const totalPortfolio = positionsMarketValue + cashAvailable;
             const unrealizedPnL = positionsMarketValue - deployedCapital;
@@ -985,7 +995,7 @@
 
             // Update Positions Market Value
             document.getElementById('positionsValue').textContent = `$${positionsMarketValue.toLocaleString()}`;
-            document.getElementById('activeStocksCount').textContent = `${activeStocks} Active Stocks`;
+            document.getElementById('activeStocksCount').textContent = `${activeBuyCount} Active Stocks`;
 
             // Update Cash Available
             document.getElementById('cashAvailable').textContent = `$${cashAvailable.toLocaleString()}`;
