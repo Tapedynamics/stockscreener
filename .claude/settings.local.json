@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -c \"from database import get_db; db = get_db(); h = db.get_portfolio_history(limit=5); print(''Latest 5 snapshots:''); [print(f\"\"  {s[''timestamp'']}: portfolio_value = {s.get(''portfolio_value'', ''MISSING'')}\"\") for s in h]\")"
+      "Bash(python check_january_universe.py)",
+      "WebSearch",
+      "Bash(git add -A)"
     ],
     "deny": [],
     "ask": []
