@@ -694,6 +694,27 @@
                 <div class="next-rebalance">🤖 AI Agent Status</div>
                 <div class="rebalance-time" id="schedulerStatus">Automated Weekly Rebalancing at Monday 20:00 CET (19:00 London)</div>
             </div>
+            <div style="display: flex; gap: 15px;">
+                <button class="btn-primary" id="refreshPricesBtn" onclick="refreshPortfolioPrices()">
+                    💰 Refresh Prices
+                </button>
+            </div>
+        </div>
+
+        <!-- Price Update Results (Hidden by default) -->
+        <div id="priceUpdateResults" style="display: none; margin-bottom: 30px;">
+            <div style="background: linear-gradient(135deg, #1a1f3a 0%, #2d1b3d 100%); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 15px; padding: 25px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="color: #fff; font-size: 1.3em; margin: 0;">💰 Real-Time Portfolio Value</h3>
+                    <button onclick="document.getElementById('priceUpdateResults').style.display='none'" style="background: none; border: none; color: #8b92a7; cursor: pointer; font-size: 1.2em;">✕</button>
+                </div>
+
+                <!-- Summary -->
+                <div id="pnlSummary" style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 10px; margin-bottom: 20px;"></div>
+
+                <!-- Positions Table -->
+                <div id="positionsTable"></div>
+            </div>
         </div>
 
         <!-- Navigation Tabs -->
@@ -1484,6 +1505,79 @@
             // Days tracked
             const daysTracked = chartData.dates ? chartData.dates.length : 0;
             document.getElementById('chart-days-tracked').textContent = daysTracked;
+        }
+
+        // ========================================
+        // REFRESH PRICES & P&L
+        // ========================================
+        async function refreshPortfolioPrices() {
+            const button = document.getElementById('refreshPricesBtn');
+            const resultsDiv = document.getElementById('priceUpdateResults');
+
+            button.disabled = true;
+            button.textContent = '⏳ Fetching prices...';
+
+            try {
+                const response = await fetch('/api/portfolio/refresh-prices');
+                const data = await response.json();
+
+                if (data.success) {
+                    // Show results div
+                    resultsDiv.style.display = 'block';
+
+                    // Populate summary
+                    const summary = data.data.summary;
+                    document.getElementById('pnlSummary').innerHTML = `
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; padding: 20px; background: rgba(102, 126, 234, 0.1); border-radius: 12px; margin-bottom: 20px;">
+                            <div>
+                                <div style="color: #8b92a7; font-size: 0.9em; margin-bottom: 8px;">Total Invested</div>
+                                <div style="color: #fff; font-size: 1.5em; font-weight: 600;">$${summary.total_invested.toLocaleString()}</div>
+                            </div>
+                            <div>
+                                <div style="color: #8b92a7; font-size: 0.9em; margin-bottom: 8px;">Current Value</div>
+                                <div style="color: #fff; font-size: 1.5em; font-weight: 600;">$${summary.total_current_value.toLocaleString()}</div>
+                            </div>
+                            <div>
+                                <div style="color: #8b92a7; font-size: 0.9em; margin-bottom: 8px;">Total P&L</div>
+                                <div style="color: ${summary.total_pnl_dollars >= 0 ? '#10b981' : '#ef4444'}; font-size: 1.5em; font-weight: 600;">
+                                    ${summary.total_pnl_dollars >= 0 ? '+' : ''}$${summary.total_pnl_dollars.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${summary.total_pnl_percent >= 0 ? '+' : ''}${summary.total_pnl_percent.toFixed(2)}%)
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    // Populate positions table
+                    let tableHTML = '<table style="width: 100%; margin-top: 20px; border-collapse: collapse; background: rgba(26, 31, 58, 0.6); border-radius: 12px; overflow: hidden;">';
+                    tableHTML += '<thead><tr style="background: rgba(0,0,0,0.3);"><th style="padding: 12px; text-align: left;">Ticker</th><th style="padding: 12px; text-align: center;">Shares</th><th style="padding: 12px; text-align: center;">Purchase</th><th style="padding: 12px; text-align: center;">Current</th><th style="padding: 12px; text-align: center;">P&L</th></tr></thead>';
+                    tableHTML += '<tbody>';
+
+                    data.data.positions.forEach(pos => {
+                        const pnlColor = pos.pnl_dollars >= 0 ? '#10b981' : '#ef4444';
+                        tableHTML += `
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                <td style="padding: 12px; font-weight: 600;">${pos.ticker}</td>
+                                <td style="padding: 12px; text-align: center;">${pos.shares.toFixed(2)}</td>
+                                <td style="padding: 12px; text-align: center;">$${pos.purchase_price.toFixed(2)}</td>
+                                <td style="padding: 12px; text-align: center;">$${pos.current_price.toFixed(2)}</td>
+                                <td style="padding: 12px; text-align: center; color: ${pnlColor}; font-weight: 600;">
+                                    ${pos.pnl_dollars >= 0 ? '+' : ''}$${pos.pnl_dollars.toFixed(2)} (${pos.pnl_percent >= 0 ? '+' : ''}${pos.pnl_percent.toFixed(2)}%)
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    tableHTML += '</tbody></table>';
+
+                    document.getElementById('positionsTable').innerHTML = tableHTML;
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error fetching prices:', error);
+                alert('Error fetching prices: ' + error.message);
+            } finally {
+                button.disabled = false;
+                button.textContent = '💰 Refresh Prices';
+            }
         }
     </script>
 </body>
