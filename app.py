@@ -348,8 +348,9 @@ def execute_trade(ticker: str, action: str, capital: float, rank: int, strategy_
         # Get company name
         company_name = info.get('shortName') or info.get('longName') or ticker
 
-        # Calculate shares
-        shares = capital / price
+        # Calculate shares (whole numbers only - brokers don't execute fractional shares)
+        shares = int(capital / price)
+        actual_cost = shares * price
 
         # Record trade in database
         trade_id = db.record_trade(

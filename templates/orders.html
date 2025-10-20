@@ -341,7 +341,7 @@
                     <td class="${actionClass}">${trade.action}</td>
                     <td><span class="rank-badge">#${trade.rank || '-'}</span></td>
                     <td>$${trade.price.toFixed(2)}</td>
-                    <td>${trade.shares.toFixed(2)}</td>
+                    <td>${Math.floor(trade.shares)}</td>
                     <td>$${trade.capital_allocated.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</td>
                     <td><strong>$${trade.total_cost.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</strong></td>
                     <td>

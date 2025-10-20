@@ -1557,7 +1557,7 @@
                         tableHTML += `
                             <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
                                 <td style="padding: 12px; font-weight: 600;">${pos.ticker}</td>
-                                <td style="padding: 12px; text-align: center;">${pos.shares.toFixed(2)}</td>
+                                <td style="padding: 12px; text-align: center;">${Math.floor(pos.shares)}</td>
                                 <td style="padding: 12px; text-align: center;">$${pos.purchase_price.toFixed(2)}</td>
                                 <td style="padding: 12px; text-align: center;">$${pos.current_price.toFixed(2)}</td>
                                 <td style="padding: 12px; text-align: center; color: ${pnlColor}; font-weight: 600;">
