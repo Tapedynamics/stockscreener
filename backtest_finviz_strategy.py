@@ -49,8 +49,38 @@ def calculate_momentum(prices, date, lookback_days=30):
         print(f"Error calculating momentum for {date}: {e}")
         return pd.Series()
 
-def run_backtest():
-    """Run backtest with Finviz universe and Yahoo historical data"""
+def load_january_universe():
+    """Load January 2025 universe from file if available"""
+    universe_file = 'january_2025_universe.txt'
+
+    if not os.path.exists(universe_file):
+        return None
+
+    print(f"\nLoading January 2025 universe from {universe_file}...")
+    tickers = []
+
+    with open(universe_file, 'r') as f:
+        in_tickers_section = False
+        for line in f:
+            line = line.strip()
+            if line == 'Tickers:':
+                in_tickers_section = True
+                continue
+            if in_tickers_section and line and not line.startswith('DETAILED'):
+                ticker = line.strip()
+                if ticker and ticker[0].isalpha():
+                    tickers.append(ticker)
+            if line.startswith('DETAILED'):
+                break
+
+    return tickers
+
+def run_backtest(use_january_universe=False):
+    """Run backtest with Finviz universe and Yahoo historical data
+
+    Args:
+        use_january_universe: If True, use verified January universe from file
+    """
 
     db = get_db()
 
@@ -61,15 +91,25 @@ def run_backtest():
     print(f"Trailing stop: {TRAILING_STOP_PERCENT*100:.0f}%")
     print(f"Initial capital: ${INITIAL_CAPITAL:,.0f}")
 
-    # Get current Finviz universe
-    print(f"\nFetching current Finviz universe...")
-    try:
-        universe = get_finviz_stocks(FINVIZ_URL)
-        print(f"Finviz returned {len(universe)} stocks that pass all filters")
-        print(f"Using these stocks as universe: {', '.join(universe[:10])}...")
-    except Exception as e:
-        print(f"Error fetching Finviz: {e}")
-        return
+    # Get universe
+    if use_january_universe:
+        universe = load_january_universe()
+        if universe:
+            print(f"Loaded January 2025 verified universe: {len(universe)} stocks")
+            print(f"Stocks: {', '.join(universe)}")
+        else:
+            print("ERROR: january_2025_universe.txt not found")
+            print("Run verify_january_universe_with_fmp.py first")
+            return
+    else:
+        print(f"\nFetching current Finviz universe...")
+        try:
+            universe = get_finviz_stocks(FINVIZ_URL)
+            print(f"Finviz returned {len(universe)} stocks that pass all filters")
+            print(f"Using these stocks as universe: {', '.join(universe[:10])}...")
+        except Exception as e:
+            print(f"Error fetching Finviz: {e}")
+            return
 
     # Download historical data from Yahoo
     print(f"\nDownloading historical data from Yahoo Finance...")
@@ -270,7 +310,30 @@ if __name__ == '__main__':
         print("and populate with Finviz strategy backtest")
         print("="*70)
 
-        response = input("\nProceed? (yes/no): ")
+        # Check if January universe exists
+        january_exists = os.path.exists('january_2025_universe.txt')
+
+        if january_exists:
+            print("\n✓ Found january_2025_universe.txt (verified historical universe)")
+            print("\nWhich universe to use?")
+            print("  1. January 2025 verified universe (RECOMMENDED - no look-ahead bias)")
+            print("  2. Current Finviz universe (WARNING - has look-ahead bias)")
+
+            universe_choice = input("\nChoice (1/2): ").strip()
+            use_january = universe_choice == '1'
+        else:
+            print("\n✗ january_2025_universe.txt not found")
+            print("\nTo get accurate backtest, run: python verify_january_universe_with_fmp.py")
+            print("\nFor now, will use current Finviz universe (has look-ahead bias)")
+
+            response = input("\nProceed anyway? (yes/no): ")
+            if response.lower() != 'yes':
+                print("\nCancelled\n")
+                exit(0)
+
+            use_january = False
+
+        response = input("\nProceed with backtest? (yes/no): ")
 
         if response.lower() == 'yes':
             # Clear existing snapshots
@@ -288,7 +351,7 @@ if __name__ == '__main__':
             print("\nCleared existing data, starting backtest...\n")
 
             # Run backtest
-            run_backtest()
+            run_backtest(use_january_universe=use_january)
 
             # Lock all snapshots
             conn = db.get_connection()
