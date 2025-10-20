@@ -3,7 +3,7 @@
 Database models and initialization for Stock Screener
 """
 
-from db_adapter import adapter
+import sqlite3
 from datetime import datetime
 import json
 import os
@@ -23,13 +23,15 @@ class Database:
         self.db_path = db_path
         self.init_db()
 
-    def get_connection(self):
+    def get_connection(self) -> sqlite3.Connection:
         """Get database connection
 
         Returns:
-            Database connection with Row factory
+            SQLite connection with Row factory
         """
-        return adapter.get_connection(self.db_path)
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
 
     def init_db(self):
         """Initialize database tables"""
@@ -37,7 +39,7 @@ class Database:
         cursor = conn.cursor()
 
         # Portfolio snapshots table
-        adapter.execute(cursor, '''
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS portfolio_snapshots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -52,20 +54,20 @@ class Database:
 
         # Add portfolio_value column if it doesn't exist (migration)
         try:
-            adapter.execute(cursor, 'ALTER TABLE portfolio_snapshots ADD COLUMN portfolio_value REAL')
+            cursor.execute('ALTER TABLE portfolio_snapshots ADD COLUMN portfolio_value REAL')
             logger.info("Added portfolio_value column to portfolio_snapshots")
-        except Exception:
+        except sqlite3.OperationalError:
             pass  # Column already exists
 
         # Add is_locked column if it doesn't exist (migration)
         try:
-            adapter.execute(cursor, 'ALTER TABLE portfolio_snapshots ADD COLUMN is_locked BOOLEAN DEFAULT 0')
+            cursor.execute('ALTER TABLE portfolio_snapshots ADD COLUMN is_locked BOOLEAN DEFAULT 0')
             logger.info("Added is_locked column to portfolio_snapshots")
-        except Exception:
+        except sqlite3.OperationalError:
             pass  # Column already exists
 
         # Activity log table
-        adapter.execute(cursor, '''
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS activity_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -77,7 +79,7 @@ class Database:
         ''')
 
         # Stock performance tracking table
-        adapter.execute(cursor, '''
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS stock_performance (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ticker TEXT NOT NULL,
@@ -89,7 +91,7 @@ class Database:
         ''')
 
         # Portfolio settings table
-        adapter.execute(cursor, '''
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL,
@@ -98,7 +100,7 @@ class Database:
         ''')
 
         # Sold positions tracking (for momentum rotation strategy)
-        adapter.execute(cursor, '''
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS sold_positions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ticker TEXT NOT NULL,
@@ -112,7 +114,7 @@ class Database:
         ''')
 
         # Trade execution tracking (detailed order tickets)
-        adapter.execute(cursor, '''
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS trades (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -132,37 +134,37 @@ class Database:
         ''')
 
         # Create indexes for performance
-        adapter.execute(cursor, '''
+        cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_portfolio_timestamp
             ON portfolio_snapshots(timestamp DESC)
         ''')
 
-        adapter.execute(cursor, '''
+        cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_activity_timestamp
             ON activity_log(timestamp DESC)
         ''')
 
-        adapter.execute(cursor, '''
+        cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_stock_ticker_date
             ON stock_performance(ticker, date DESC)
         ''')
 
-        adapter.execute(cursor, '''
+        cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_activity_action_type
             ON activity_log(action_type, timestamp DESC)
         ''')
 
-        adapter.execute(cursor, '''
+        cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_sold_ticker_date
             ON sold_positions(ticker, sold_date DESC)
         ''')
 
-        adapter.execute(cursor, '''
+        cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_trades_timestamp
             ON trades(timestamp DESC)
         ''')
 
-        adapter.execute(cursor, '''
+        cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_trades_ticker
             ON trades(ticker, timestamp DESC)
         ''')
@@ -195,7 +197,7 @@ class Database:
                 # It's already a string
                 timestamp_str = timestamp
 
-            adapter.execute(cursor, '''
+            cursor.execute('''
                 INSERT INTO portfolio_snapshots
                 (timestamp, take_profit, hold, buffer, total_stocks, portfolio_value, notes, is_locked)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -211,7 +213,7 @@ class Database:
             ))
         else:
             # Use default CURRENT_TIMESTAMP
-            adapter.execute(cursor, '''
+            cursor.execute('''
                 INSERT INTO portfolio_snapshots
                 (take_profit, hold, buffer, total_stocks, portfolio_value, notes, is_locked)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -225,7 +227,7 @@ class Database:
                 1 if is_locked else 0
             ))
 
-        snapshot_id = adapter.get_last_insert_id(cursor)
+        snapshot_id = cursor.lastrowid
         conn.commit()
         conn.close()
 
@@ -236,13 +238,13 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        adapter.execute(cursor, '''
+        cursor.execute('''
             SELECT * FROM portfolio_snapshots
             ORDER BY timestamp DESC
             LIMIT 1
         ''')
 
-        row = adapter.fetchone_dict(cursor)
+        row = cursor.fetchone()
         conn.close()
 
         if row:
@@ -262,13 +264,13 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        adapter.execute(cursor, '''
+        cursor.execute('''
             SELECT * FROM portfolio_snapshots
             ORDER BY timestamp DESC
             LIMIT ?
         ''', (limit,))
 
-        rows = adapter.fetchall_dict(cursor)
+        rows = cursor.fetchall()
         conn.close()
 
         history = []
@@ -291,7 +293,7 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        adapter.execute(cursor, '''
+        cursor.execute('''
             INSERT INTO activity_log
             (action_type, ticker, description, metadata)
             VALUES (?, ?, ?, ?)
@@ -302,7 +304,7 @@ class Database:
             json.dumps(metadata) if metadata else None
         ))
 
-        log_id = adapter.get_last_insert_id(cursor)
+        log_id = cursor.lastrowid
         conn.commit()
         conn.close()
 
@@ -313,13 +315,13 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        adapter.execute(cursor, '''
+        cursor.execute('''
             SELECT * FROM activity_log
             ORDER BY timestamp DESC
             LIMIT ?
         ''', (limit,))
 
-        rows = adapter.fetchall_dict(cursor)
+        rows = cursor.fetchall()
         conn.close()
 
         logs = []
@@ -384,8 +386,8 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        adapter.execute(cursor, 'SELECT value FROM settings WHERE key = ?', (key,))
-        row = adapter.fetchone_dict(cursor)
+        cursor.execute('SELECT value FROM settings WHERE key = ?', (key,))
+        row = cursor.fetchone()
         conn.close()
 
         if row:
@@ -402,7 +404,7 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        adapter.execute(cursor, '''
+        cursor.execute('''
             INSERT OR REPLACE INTO settings (key, value, updated_at)
             VALUES (?, ?, CURRENT_TIMESTAMP)
         ''', (key, value))
@@ -423,14 +425,11 @@ class Database:
         cursor = conn.cursor()
 
         try:
-            cursor.executemany(
-                adapter.convert_query('''
-                    INSERT OR REPLACE INTO stock_performance
-                    (ticker, date, price, performance)
-                    VALUES (?, ?, ?, NULL)
-                '''),
-                price_data
-            )
+            cursor.executemany('''
+                INSERT OR REPLACE INTO stock_performance
+                (ticker, date, price, performance)
+                VALUES (?, ?, ?, NULL)
+            ''', price_data)
 
             conn.commit()
             logger.info(f"Batch saved {len(price_data)} price records")
@@ -453,7 +452,7 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        adapter.execute(cursor, '''
+        cursor.execute('''
             SELECT ticker, date, price, performance
             FROM stock_performance
             WHERE ticker = ?
@@ -461,10 +460,10 @@ class Database:
             LIMIT ?
         ''', (ticker, days))
 
-        rows = adapter.fetchall_dict(cursor)
+        rows = cursor.fetchall()
         conn.close()
 
-        return rows
+        return [dict(row) for row in rows]
 
     def record_sale(self, ticker: str, reason: str, rank: int = None) -> int:
         """Record a stock sale for momentum rotation tracking
@@ -492,13 +491,13 @@ class Database:
             # Drop-outs can rebuy immediately if back in top 15
             can_rebuy_after = sold_date
 
-        adapter.execute(cursor, '''
+        cursor.execute('''
             INSERT INTO sold_positions
             (ticker, sold_date, sold_reason, sold_rank, can_rebuy_after)
             VALUES (?, ?, ?, ?, ?)
         ''', (ticker, sold_date.isoformat(), reason, rank, can_rebuy_after.isoformat()))
 
-        record_id = adapter.get_last_insert_id(cursor)
+        record_id = cursor.lastrowid
         conn.commit()
         conn.close()
 
@@ -521,7 +520,7 @@ class Database:
         cursor = conn.cursor()
 
         # Get most recent non-rebought sale
-        adapter.execute(cursor, '''
+        cursor.execute('''
             SELECT sold_date, sold_reason, sold_rank, can_rebuy_after
             FROM sold_positions
             WHERE ticker = ? AND rebought = 0
@@ -529,7 +528,7 @@ class Database:
             LIMIT 1
         ''', (ticker,))
 
-        row = adapter.fetchone_dict(cursor)
+        row = cursor.fetchone()
         conn.close()
 
         if not row:
@@ -565,7 +564,7 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        adapter.execute(cursor, '''
+        cursor.execute('''
             UPDATE sold_positions
             SET rebought = 1, rebought_date = ?
             WHERE ticker = ? AND rebought = 0
@@ -587,14 +586,14 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        adapter.execute(cursor, '''
+        cursor.execute('''
             SELECT ticker, sold_date, sold_reason, sold_rank, can_rebuy_after
             FROM sold_positions
             WHERE rebought = 0
             ORDER BY sold_date DESC
         ''')
 
-        rows = adapter.fetchall_dict(cursor)
+        rows = cursor.fetchall()
         conn.close()
 
         now = datetime.now()
@@ -631,13 +630,13 @@ class Database:
         cursor = conn.cursor()
 
         if before_date:
-            adapter.execute(cursor, '''
+            cursor.execute('''
                 UPDATE portfolio_snapshots
                 SET is_locked = 1
                 WHERE timestamp < ? AND (is_locked = 0 OR is_locked IS NULL)
             ''', (before_date,))
         else:
-            adapter.execute(cursor, '''
+            cursor.execute('''
                 UPDATE portfolio_snapshots
                 SET is_locked = 1
                 WHERE (is_locked = 0 OR is_locked IS NULL)
@@ -666,14 +665,14 @@ class Database:
         monday = now - timedelta(days=now.weekday())
         monday_start = monday.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        adapter.execute(cursor, '''
+        cursor.execute('''
             SELECT * FROM portfolio_snapshots
             WHERE timestamp >= ?
             ORDER BY timestamp DESC
             LIMIT 1
         ''', (monday_start.isoformat(),))
 
-        row = adapter.fetchone_dict(cursor)
+        row = cursor.fetchone()
         conn.close()
 
         if row:
@@ -742,7 +741,7 @@ class Database:
         total_cost = price * shares
         cash_remaining = capital_allocated - total_cost
 
-        adapter.execute(cursor, '''
+        cursor.execute('''
             INSERT INTO trades
             (ticker, company_name, action, rank, price, shares, capital_allocated,
              total_cost, cash_remaining, status, strategy_note, metadata)
@@ -762,7 +761,7 @@ class Database:
             json.dumps(metadata) if metadata else None
         ))
 
-        trade_id = adapter.get_last_insert_id(cursor)
+        trade_id = cursor.lastrowid
         conn.commit()
         conn.close()
 
@@ -783,20 +782,20 @@ class Database:
         cursor = conn.cursor()
 
         if ticker:
-            adapter.execute(cursor, '''
+            cursor.execute('''
                 SELECT * FROM trades
                 WHERE ticker = ?
                 ORDER BY timestamp DESC
                 LIMIT ?
             ''', (ticker, limit))
         else:
-            adapter.execute(cursor, '''
+            cursor.execute('''
                 SELECT * FROM trades
                 ORDER BY timestamp DESC
                 LIMIT ?
             ''', (limit,))
 
-        rows = adapter.fetchall_dict(cursor)
+        rows = cursor.fetchall()
         conn.close()
 
         trades = []
