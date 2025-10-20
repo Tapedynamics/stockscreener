@@ -1042,37 +1042,48 @@ def migrate_postgres():
 
         db = get_db()
         conn = db.get_connection()
+
+        # Enable autocommit for PostgreSQL DDL operations
+        if adapter.db_type == 'postgresql':
+            conn.set_session(autocommit=True)
+            logger.info("[MIGRATE] PostgreSQL autocommit enabled")
+
         cursor = conn.cursor()
 
-        logger.info("[MIGRATE] Starting PostgreSQL table migration...")
+        logger.info("[MIGRATE] Starting table migration...")
 
         # Drop all tables
         tables = ['trades', 'portfolio_snapshots', 'activity_log', 'stock_performance', 'sold_positions', 'settings']
+        dropped = []
 
         for table in tables:
             try:
-                adapter.execute(cursor, f'DROP TABLE IF EXISTS {table} CASCADE')
+                if adapter.db_type == 'postgresql':
+                    adapter.execute(cursor, f'DROP TABLE IF EXISTS {table} CASCADE')
+                else:
+                    adapter.execute(cursor, f'DROP TABLE IF EXISTS {table}')
+                dropped.append(table)
                 logger.info(f"[MIGRATE] Dropped table: {table}")
             except Exception as e:
                 logger.warning(f"[MIGRATE] Could not drop {table}: {e}")
 
-        conn.commit()
-        logger.info("[MIGRATE] All tables dropped")
+        logger.info(f"[MIGRATE] Dropped {len(dropped)} tables")
 
         # Recreate tables using init_db (will use adapter with TIMESTAMP)
         conn.close()
         db.init_db()
-        logger.info("[MIGRATE] All tables recreated with PostgreSQL types")
+        logger.info("[MIGRATE] All tables recreated successfully")
 
         return api_success({
             'message': 'PostgreSQL migration complete',
-            'tables_dropped': tables,
-            'tables_recreated': tables,
+            'tables_dropped': dropped,
             'database_type': adapter.db_type
         })
 
     except Exception as e:
         logger.error(f"[MIGRATE] Migration failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return api_error(str(e), 500)
 
 
