@@ -40,6 +40,7 @@ class DatabaseAdapter:
         - ? → %s (parameter placeholders)
         - AUTOINCREMENT → (removed, SERIAL handles it)
         - INTEGER PRIMARY KEY AUTOINCREMENT → SERIAL PRIMARY KEY
+        - DATETIME → TIMESTAMP (PostgreSQL type)
         - BOOLEAN → BOOLEAN (same in both)
         - REAL → REAL (same in both)
         - TEXT → TEXT (same in both)
@@ -55,6 +56,9 @@ class DatabaseAdapter:
             'INTEGER PRIMARY KEY AUTOINCREMENT',
             'SERIAL PRIMARY KEY'
         )
+
+        # Replace DATETIME with TIMESTAMP (PostgreSQL doesn't have DATETIME)
+        converted = converted.replace('DATETIME', 'TIMESTAMP')
 
         # Replace ? placeholders with %s
         converted = converted.replace('?', '%s')
