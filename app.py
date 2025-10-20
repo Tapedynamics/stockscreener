@@ -210,31 +210,45 @@ def calculate_momentum_rankings(tickers: list) -> Dict[str, Dict[str, Any]]:
         return {}
 
 
-def calculate_real_portfolio_value(tickers: list, initial_investment: float = 150000) -> float:
+def calculate_real_portfolio_value(db) -> float:
     """
-    Calculate real portfolio value using Yahoo Finance prices
+    Calculate real portfolio value using actual trades and current Yahoo Finance prices
 
     Args:
-        tickers: List of stock tickers
-        initial_investment: Total initial investment amount
+        db: Database instance to fetch trades
 
     Returns:
-        Current portfolio value based on real prices
+        Current portfolio value based on real BUY trades and current prices
     """
     try:
-        if not tickers:
-            logger.warning("No tickers provided for portfolio value calculation")
-            return initial_investment
+        # Get all BUY trades (active positions)
+        buy_trades = db.get_trades(limit=1000)  # Get all trades
+        buy_trades = [t for t in buy_trades if t['action'] == 'BUY']
 
-        # Equal allocation per stock
-        investment_per_stock = initial_investment / len(tickers)
+        if not buy_trades:
+            logger.warning("No BUY trades found for portfolio value calculation")
+            return 0
+
+        # Extract unique tickers and their shares
+        holdings = {}
+        for trade in buy_trades:
+            ticker = trade['ticker']
+            shares = trade['shares']
+            if ticker in holdings:
+                holdings[ticker] += shares
+            else:
+                holdings[ticker] = shares
+
+        tickers = list(holdings.keys())
 
         # Download current prices
-        data = yf.download(tickers, period='5d', progress=False, auto_adjust=True)
+        data = yf.download(tickers, period='1d', progress=False, auto_adjust=True)
 
         if data.empty:
             logger.warning("No price data downloaded from Yahoo Finance")
-            return initial_investment
+            # Fallback: use purchase prices from trades
+            total_value = sum(t['total_cost'] for t in buy_trades)
+            return total_value
 
         # Get Close prices
         if 'Close' in data.columns:
@@ -244,47 +258,41 @@ def calculate_real_portfolio_value(tickers: list, initial_investment: float = 15
         else:
             prices = data
 
-        # Get latest prices for each stock
+        # Calculate current value for each position
         total_value = 0
         successful_tickers = 0
 
-        for ticker in tickers:
+        for ticker, shares in holdings.items():
             try:
                 if ticker in prices.columns:
                     stock_prices = prices[ticker].dropna()
-                    if len(stock_prices) >= 2:
-                        # Get first and last price from the period
-                        first_price = stock_prices.iloc[0]
-                        last_price = stock_prices.iloc[-1]
-
-                        # Calculate value for this stock
-                        shares = investment_per_stock / first_price
-                        current_value = shares * last_price
+                    if len(stock_prices) > 0:
+                        current_price = stock_prices.iloc[-1]
+                        current_value = shares * current_price
                         total_value += current_value
                         successful_tickers += 1
-                        logger.debug(f"{ticker}: ${first_price:.2f} -> ${last_price:.2f}, Value: ${current_value:.2f}")
+                        logger.debug(f"{ticker}: {shares:.0f} shares @ ${current_price:.2f} = ${current_value:.2f}")
                     else:
-                        # Not enough data, use initial investment
-                        total_value += investment_per_stock
-                        logger.warning(f"{ticker}: Insufficient price data, using initial value")
+                        # No price data, use purchase cost
+                        purchase_cost = sum(t['total_cost'] for t in buy_trades if t['ticker'] == ticker)
+                        total_value += purchase_cost
+                        logger.warning(f"{ticker}: No price data, using purchase cost")
                 else:
-                    # Ticker not found, use initial investment
-                    total_value += investment_per_stock
-                    logger.warning(f"{ticker}: Not found in price data, using initial value")
+                    # Ticker not found, use purchase cost
+                    purchase_cost = sum(t['total_cost'] for t in buy_trades if t['ticker'] == ticker)
+                    total_value += purchase_cost
+                    logger.warning(f"{ticker}: Not found in price data, using purchase cost")
             except Exception as e:
                 logger.error(f"Error processing {ticker}: {e}")
-                total_value += investment_per_stock
+                purchase_cost = sum(t['total_cost'] for t in buy_trades if t['ticker'] == ticker)
+                total_value += purchase_cost
 
-        if successful_tickers == 0:
-            logger.warning("No successful price lookups, returning initial investment")
-            return initial_investment
-
-        logger.info(f"Portfolio value calculated: ${total_value:,.2f} ({successful_tickers}/{len(tickers)} tickers)")
+        logger.info(f"Portfolio value calculated: ${total_value:,.2f} ({successful_tickers}/{len(holdings)} positions)")
         return total_value
 
     except Exception as e:
         logger.error(f"Error calculating portfolio value: {e}")
-        return initial_investment
+        return 0
 
 
 def format_trade_ticket(trade: Dict) -> str:
@@ -790,8 +798,8 @@ def run_screener():
 
             logger.info(f"ROTATION COMPLETE: {len(active_tickers)} stocks active, {len(rotation_result['to_buffer'])} in buffer")
 
-        # Calculate value only for active positions
-        new_portfolio_value = calculate_real_portfolio_value(active_tickers, capital_per_stock * len(active_tickers))
+        # Calculate value from actual trades (shares × current price)
+        new_portfolio_value = calculate_real_portfolio_value(db)
 
         snapshot_id = None
 
