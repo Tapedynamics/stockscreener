@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orders - AI Stock Screener</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #1a1f3a 0%, #2d1b4e 100%);
+            color: #e4e8f0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .back-btn {
+            background: rgba(102, 126, 234, 0.2);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            color: #667eea;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .back-btn:hover {
+            background: rgba(102, 126, 234, 0.3);
+            transform: translateX(-3px);
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .stats-bar {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-box {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #8b92a7;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .orders-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead tr {
+            background: rgba(0, 0, 0, 0.3);
+            border-bottom: 2px solid rgba(102, 126, 234, 0.3);
+        }
+
+        th {
+            padding: 15px;
+            text-align: left;
+            font-size: 12px;
+            color: #8b92a7;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        th:nth-child(n+3) {
+            text-align: right;
+        }
+
+        td {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        td:nth-child(n+3) {
+            text-align: right;
+        }
+
+        tbody tr {
+            transition: background 0.2s ease;
+        }
+
+        tbody tr:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .ticker {
+            font-weight: 600;
+            font-size: 16px;
+            color: #fff;
+        }
+
+        .company {
+            font-size: 13px;
+            color: #8b92a7;
+            margin-top: 2px;
+        }
+
+        .action-buy {
+            color: #10b981;
+            font-weight: 600;
+        }
+
+        .action-sell {
+            color: #ef4444;
+            font-weight: 600;
+        }
+
+        .rank-badge {
+            display: inline-block;
+            background: rgba(102, 126, 234, 0.2);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            color: #667eea;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .strategy-note {
+            font-size: 12px;
+            color: #8b92a7;
+            font-style: italic;
+        }
+
+        .timestamp {
+            font-size: 12px;
+            color: #8b92a7;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #8b92a7;
+        }
+
+        .loading i {
+            font-size: 32px;
+            margin-bottom: 15px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .no-orders {
+            text-align: center;
+            padding: 60px 20px;
+            color: #8b92a7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-left">
+                <a href="/" class="back-btn">
+                    ← Back to Dashboard
+                </a>
+                <div>
+                    <h1>Trade Orders</h1>
+                    <div style="color: #8b92a7; font-size: 14px; margin-top: 5px;">
+                        Complete order history with execution details
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-bar">
+            <div class="stat-box">
+                <div class="stat-label">Total Orders</div>
+                <div class="stat-value" id="totalOrders">-</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Total Deployed</div>
+                <div class="stat-value" id="totalDeployed">-</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Buy Orders</div>
+                <div class="stat-value" id="buyOrders" style="color: #10b981;">-</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Sell Orders</div>
+                <div class="stat-value" id="sellOrders" style="color: #ef4444;">-</div>
+            </div>
+        </div>
+
+        <div class="orders-card">
+            <div id="loadingOrders" class="loading">
+                <div style="font-size: 32px; margin-bottom: 15px;">⏳</div>
+                Loading orders...
+            </div>
+
+            <div id="ordersTable" style="display: none;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date/Time</th>
+                            <th>Ticker</th>
+                            <th>Action</th>
+                            <th>Rank</th>
+                            <th>Price</th>
+                            <th>Shares</th>
+                            <th>Capital</th>
+                            <th>Total Cost</th>
+                            <th>Strategy</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ordersBody">
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="noOrders" class="no-orders" style="display: none;">
+                <div style="font-size: 32px; margin-bottom: 15px;">📋</div>
+                No orders yet. Execute your first screener run to start trading.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            loadOrders();
+        });
+
+        async function loadOrders() {
+            try {
+                const response = await fetch('/api/trades?limit=100');
+                const data = await response.json();
+
+                if (data.success && data.data.trades && data.data.trades.length > 0) {
+                    displayOrders(data.data.trades);
+                } else {
+                    showNoOrders();
+                }
+            } catch (error) {
+                console.error('Error loading orders:', error);
+                showNoOrders();
+            }
+        }
+
+        function displayOrders(trades) {
+            document.getElementById('loadingOrders').style.display = 'none';
+            document.getElementById('ordersTable').style.display = 'block';
+
+            const tbody = document.getElementById('ordersBody');
+            tbody.innerHTML = '';
+
+            // Calculate stats
+            const buyOrders = trades.filter(t => t.action === 'BUY').length;
+            const sellOrders = trades.filter(t => t.action === 'SELL').length;
+            const totalDeployed = trades.reduce((sum, t) => sum + t.total_cost, 0);
+
+            document.getElementById('totalOrders').textContent = trades.length;
+            document.getElementById('totalDeployed').textContent = '$' + totalDeployed.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+            document.getElementById('buyOrders').textContent = buyOrders;
+            document.getElementById('sellOrders').textContent = sellOrders;
+
+            // Populate table
+            trades.forEach(trade => {
+                const row = document.createElement('tr');
+
+                const date = new Date(trade.timestamp);
+                const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+                const actionClass = trade.action === 'BUY' ? 'action-buy' : 'action-sell';
+
+                row.innerHTML = `
+                    <td>
+                        <div>${dateStr}</div>
+                        <div class="timestamp">${timeStr}</div>
+                    </td>
+                    <td>
+                        <div class="ticker">${trade.ticker}</div>
+                        <div class="company">${trade.company_name || ''}</div>
+                    </td>
+                    <td class="${actionClass}">${trade.action}</td>
+                    <td><span class="rank-badge">#${trade.rank || '-'}</span></td>
+                    <td>$${trade.price.toFixed(2)}</td>
+                    <td>${trade.shares.toFixed(2)}</td>
+                    <td>$${trade.capital_allocated.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</td>
+                    <td><strong>$${trade.total_cost.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</strong></td>
+                    <td>
+                        <div class="strategy-note">${trade.strategy_note || '-'}</div>
+                    </td>
+                `;
+
+                tbody.appendChild(row);
+            });
+        }
+
+        function showNoOrders() {
+            document.getElementById('loadingOrders').style.display = 'none';
+            document.getElementById('noOrders').style.display = 'block';
+        }
+    </script>
+</body>
+</html>

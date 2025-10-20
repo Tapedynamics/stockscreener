@@ -685,6 +685,12 @@ def benchmark():
     return render_template('benchmark.html')
 
 
+@app.route('/orders')
+def orders():
+    """Pagina dedicata agli ordini"""
+    return render_template('orders.html')
+
+
 @app.route('/api/screener', methods=['GET'])
 def run_screener():
     """API endpoint per eseguire lo screener"""
