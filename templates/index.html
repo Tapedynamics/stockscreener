@@ -701,9 +701,6 @@
                 <button class="btn-secondary" onclick="exportCSV()">
                     📥 Export CSV
                 </button>
-                <button class="btn-secondary" onclick="clearAndPopulateHistory()" id="populateHistoryBtn" style="display: none;">
-                    🗄️ Regenerate History
-                </button>
             </div>
         </div>
 
@@ -1061,84 +1058,6 @@
         // ========================================
         // HISTORY POPULATION
         // ========================================
-        async function clearAndPopulateHistory() {
-            if (!confirm('This will DELETE all existing history and regenerate 42 weeks of data.\n\nAre you sure?')) {
-                return;
-            }
-
-            const button = document.getElementById('populateHistoryBtn');
-            button.disabled = true;
-            button.textContent = 'Clearing...';
-
-            try {
-                // First clear
-                const clearResponse = await fetch('/api/admin/clear-history', {
-                    method: 'POST'
-                });
-                const clearData = await clearResponse.json();
-
-                if (!clearData.success) {
-                    alert('Error clearing: ' + clearData.error);
-                    return;
-                }
-
-                console.log('Cleared:', clearData);
-                button.textContent = 'Generating...';
-
-                // Then populate
-                const popResponse = await fetch('/api/admin/populate-history', {
-                    method: 'POST'
-                });
-                const popData = await popResponse.json();
-
-                if (popData.success) {
-                    alert(`Success!\nDeleted: ${clearData.deleted_snapshots} old snapshots\nGenerated: ${popData.generated} new snapshots\nTotal: ${popData.snapshots_after} snapshots`);
-                    // Reload history tab
-                    await loadPortfolioHistory();
-                    button.style.display = 'none';
-                } else {
-                    alert('Error generating: ' + popData.error);
-                }
-            } catch (err) {
-                alert('Error: ' + err.message);
-            } finally {
-                button.disabled = false;
-                button.textContent = '🗄️ Regenerate History';
-            }
-        }
-
-        async function populateHistory() {
-            const button = document.getElementById('populateHistoryBtn');
-            if (!confirm('Generate 42 weeks of historical data? This will take ~5 seconds.')) {
-                return;
-            }
-
-            button.disabled = true;
-            button.textContent = 'Generating...';
-
-            try {
-                const response = await fetch('/api/admin/populate-history', {
-                    method: 'POST'
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    alert(`Success! Generated ${data.generated} snapshots.\nTotal: ${data.snapshots_after} snapshots in database.`);
-                    // Reload history tab
-                    await loadPortfolioHistory();
-                    button.style.display = 'none';
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            } catch (err) {
-                alert('Error generating history: ' + err.message);
-            } finally {
-                button.disabled = false;
-                button.textContent = '🗄️ Generate History';
-            }
-        }
-
         // ========================================
         // PAGE INITIALIZATION
         // ========================================

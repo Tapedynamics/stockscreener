@@ -552,55 +552,44 @@ def run_screener():
         # Get previous portfolio
         previous_portfolio = db.get_latest_portfolio()
 
-        # Check if we should create a new snapshot
-        # Only create if previous snapshot is older than 6 hours (to avoid chart noise)
+        # Check if we can create a new snapshot (protected historical data + weekly limit)
         from datetime import datetime, timedelta
-        should_create_new_snapshot = True
-        new_portfolio_value = None
+        can_create, reason = db.can_create_new_snapshot()
 
-        if previous_portfolio:
-            # Parse timestamp
-            prev_time = previous_portfolio['timestamp']
-            if 'T' in prev_time:
-                prev_dt = datetime.fromisoformat(prev_time.replace('Z', '+00:00'))
-            else:
-                prev_dt = datetime.strptime(prev_time, '%Y-%m-%d %H:%M:%S')
+        # Calculate portfolio value
+        initial_value = float(db.get_setting('initial_value', '150000'))
+        all_tickers = basket['take_profit'] + basket['hold'] + basket['buffer']
+        new_portfolio_value = calculate_real_portfolio_value(all_tickers, initial_value)
 
-            now = datetime.now()
-            hours_since_last = (now - prev_dt).total_seconds() / 3600
+        snapshot_id = None
 
-            # If last snapshot was less than 6 hours ago, skip creating new one
-            if hours_since_last < 6:
-                should_create_new_snapshot = False
-                new_portfolio_value = previous_portfolio.get('portfolio_value') or float(db.get_setting('initial_value', '150000'))
-                logger.info(f"Recent snapshot exists ({hours_since_last:.1f}h ago) - Skipping new snapshot - Value: ${new_portfolio_value:,.2f}")
-            else:
-                # More than 6 hours - calculate real portfolio value
-                initial_value = float(db.get_setting('initial_value', '150000'))
-                all_tickers = basket['take_profit'] + basket['hold'] + basket['buffer']
-                new_portfolio_value = calculate_real_portfolio_value(all_tickers, initial_value)
-                logger.info(f"Creating new snapshot - Real portfolio value: ${new_portfolio_value:,.2f}")
-        else:
-            # First run - calculate real value
-            initial_value = float(db.get_setting('initial_value', '150000'))
-            all_tickers = basket['take_profit'] + basket['hold'] + basket['buffer']
-            new_portfolio_value = calculate_real_portfolio_value(all_tickers, initial_value)
-            logger.info(f"First portfolio snapshot - Real value: ${new_portfolio_value:,.2f}")
-
-        # Save new snapshot only if enough time has passed
-        if should_create_new_snapshot:
+        if can_create:
+            # Create new weekly snapshot
             snapshot_id = db.save_portfolio_snapshot(
                 basket['take_profit'],
                 basket['hold'],
                 basket['buffer'],
-                notes='Manual screener run',
-                portfolio_value=new_portfolio_value
+                notes='Weekly portfolio rotation (Monday)',
+                portfolio_value=new_portfolio_value,
+                is_locked=False  # New snapshots start unlocked, can be updated during the week
             )
-            logger.info(f"New snapshot saved with ID: {snapshot_id}")
+            logger.info(f"New weekly snapshot created with ID: {snapshot_id} - Value: ${new_portfolio_value:,.2f}")
         else:
-            # Skip snapshot creation - just update activity log
-            snapshot_id = previous_portfolio['id']
-            logger.info(f"Skipping snapshot - Recent one exists (ID: {snapshot_id})")
+            # Cannot create snapshot - return reason
+            if previous_portfolio:
+                snapshot_id = previous_portfolio['id']
+                logger.warning(f"Cannot create snapshot: {reason}")
+            else:
+                # First ever run - allow creating initial snapshot
+                snapshot_id = db.save_portfolio_snapshot(
+                    basket['take_profit'],
+                    basket['hold'],
+                    basket['buffer'],
+                    notes='Initial portfolio setup',
+                    portfolio_value=new_portfolio_value,
+                    is_locked=False
+                )
+                logger.info(f"Initial portfolio snapshot created with ID: {snapshot_id}")
 
         # Compare portfolios and log changes
         if previous_portfolio:
@@ -661,7 +650,10 @@ def run_screener():
         return api_success({
             'basket': basket,
             'snapshot_id': snapshot_id,
-            'performance': stock_performance
+            'performance': stock_performance,
+            'snapshot_created': can_create,
+            'snapshot_status': reason if not can_create else 'New snapshot created',
+            'portfolio_value': new_portfolio_value
         })
 
     except Exception as e:

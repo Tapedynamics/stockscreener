@@ -306,14 +306,6 @@
             </div>
         </div>
 
-        <div class="action-buttons" style="margin-top: 30px;">
-            <button class="btn btn-primary" onclick="regenerateHistory()">
-                <i class="fas fa-sync-alt"></i> Regenerate History
-            </button>
-            <button class="btn btn-secondary" onclick="clearHistory()">
-                <i class="fas fa-trash"></i> Clear History
-            </button>
-        </div>
     </div>
 
     <script>
@@ -409,55 +401,6 @@
             `;
         }
 
-        async function regenerateHistory() {
-            if (!confirm('This will clear existing history and regenerate 42 weeks of data. Continue?')) {
-                return;
-            }
-
-            try {
-                // Clear first
-                const clearRes = await fetch('/api/admin/clear-history', { method: 'POST' });
-                const clearData = await clearRes.json();
-
-                if (!clearData.success) {
-                    alert('Error clearing history: ' + clearData.error);
-                    return;
-                }
-
-                // Then regenerate
-                const genRes = await fetch('/api/admin/populate-history', { method: 'POST' });
-                const genData = await genRes.json();
-
-                if (genData.success) {
-                    alert(`History regenerated!\n\nGenerated ${genData.generated} snapshots`);
-                    loadPortfolioHistory();
-                } else {
-                    alert('Error generating history: ' + genData.error);
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-        }
-
-        async function clearHistory() {
-            if (!confirm('Are you sure you want to delete all portfolio history? This cannot be undone.')) {
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/admin/clear-history', { method: 'POST' });
-                const data = await response.json();
-
-                if (data.success) {
-                    alert(`Cleared ${data.deleted_snapshots} snapshots and ${data.deleted_logs} log entries`);
-                    showEmptyState();
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-        }
     </script>
 </body>
 </html>

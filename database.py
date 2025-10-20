@@ -59,6 +59,13 @@ class Database:
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+        # Add is_locked column if it doesn't exist (migration)
+        try:
+            cursor.execute('ALTER TABLE portfolio_snapshots ADD COLUMN is_locked BOOLEAN DEFAULT 0')
+            logger.info("Added is_locked column to portfolio_snapshots")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
         # Activity log table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS activity_log (
@@ -136,22 +143,32 @@ class Database:
         conn.close()
         logger.info("Database initialized successfully")
 
-    def save_portfolio_snapshot(self, take_profit, hold, buffer, notes=None, portfolio_value=None):
-        """Save a portfolio snapshot"""
+    def save_portfolio_snapshot(self, take_profit, hold, buffer, notes=None, portfolio_value=None, is_locked=False):
+        """Save a portfolio snapshot
+
+        Args:
+            take_profit: List of tickers in take profit zone
+            hold: List of tickers to hold
+            buffer: List of tickers in buffer zone
+            notes: Optional notes
+            portfolio_value: Portfolio value in dollars
+            is_locked: If True, snapshot cannot be modified/deleted (for historical data)
+        """
         conn = self.get_connection()
         cursor = conn.cursor()
 
         cursor.execute('''
             INSERT INTO portfolio_snapshots
-            (take_profit, hold, buffer, total_stocks, portfolio_value, notes)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (take_profit, hold, buffer, total_stocks, portfolio_value, notes, is_locked)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (
             json.dumps(take_profit),
             json.dumps(hold),
             json.dumps(buffer),
             len(take_profit) + len(hold) + len(buffer),
             portfolio_value,
-            notes
+            notes,
+            1 if is_locked else 0
         ))
 
         snapshot_id = cursor.lastrowid
@@ -541,6 +558,107 @@ class Database:
             })
 
         return cooldowns
+
+    def lock_all_historical_snapshots(self, before_date: str = None) -> int:
+        """Lock all snapshots before a given date to prevent modification
+
+        Args:
+            before_date: ISO date string (YYYY-MM-DD). If None, locks all existing snapshots
+
+        Returns:
+            Number of snapshots locked
+        """
+        from datetime import datetime
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        if before_date:
+            cursor.execute('''
+                UPDATE portfolio_snapshots
+                SET is_locked = 1
+                WHERE timestamp < ? AND (is_locked = 0 OR is_locked IS NULL)
+            ''', (before_date,))
+        else:
+            cursor.execute('''
+                UPDATE portfolio_snapshots
+                SET is_locked = 1
+                WHERE (is_locked = 0 OR is_locked IS NULL)
+            ''')
+
+        locked_count = cursor.rowcount
+        conn.commit()
+        conn.close()
+
+        logger.info(f"Locked {locked_count} historical snapshots")
+        return locked_count
+
+    def get_this_week_snapshot(self) -> Optional[Dict[str, Any]]:
+        """Get snapshot for current week (if exists)
+
+        Returns:
+            Snapshot dict if exists, None otherwise
+        """
+        from datetime import datetime, timedelta
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # Get start of this week (Monday)
+        now = datetime.now()
+        monday = now - timedelta(days=now.weekday())
+        monday_start = monday.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        cursor.execute('''
+            SELECT * FROM portfolio_snapshots
+            WHERE timestamp >= ?
+            ORDER BY timestamp DESC
+            LIMIT 1
+        ''', (monday_start.isoformat(),))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return {
+                'id': row['id'],
+                'timestamp': row['timestamp'],
+                'take_profit': json.loads(row['take_profit']),
+                'hold': json.loads(row['hold']),
+                'buffer': json.loads(row['buffer']),
+                'total_stocks': row['total_stocks'],
+                'portfolio_value': row['portfolio_value'],
+                'notes': row['notes'],
+                'is_locked': row['is_locked']
+            }
+        return None
+
+    def can_create_new_snapshot(self) -> Tuple[bool, str]:
+        """Check if we can create a new snapshot this week
+
+        Returns:
+            Tuple of (allowed, reason)
+        """
+        from datetime import datetime
+
+        # Check if snapshot already exists this week
+        this_week_snapshot = self.get_this_week_snapshot()
+
+        if this_week_snapshot:
+            if this_week_snapshot['is_locked']:
+                return False, "This week's snapshot is locked (historical data)"
+            return False, f"Snapshot already exists for this week (ID: {this_week_snapshot['id']})"
+
+        # Check if it's Monday (weekday 0)
+        now = datetime.now()
+        if now.weekday() != 0:
+            return False, f"New snapshots can only be created on Monday (today is {now.strftime('%A')})"
+
+        # Check if it's evening (after 18:00)
+        if now.hour < 18:
+            return False, f"New snapshots can only be created after 18:00 (current time: {now.strftime('%H:%M')})"
+
+        return True, "OK - Can create new weekly snapshot"
 
 
 # Convenience function

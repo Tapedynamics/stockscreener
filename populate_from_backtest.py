@@ -117,13 +117,14 @@ def populate_database_from_backtest():
             # Calculate portfolio value
             portfolio_value = sum(shares_held[t] * current_prices[t] for t in portfolio)
 
-            # Save snapshot
+            # Save snapshot (locked as historical backtest data)
             db.save_portfolio_snapshot(
                 take_profit=portfolio[:3],
                 hold=portfolio[3:10] if len(portfolio) > 3 else [],
                 buffer=portfolio[10:] if len(portfolio) > 10 else [],
                 notes=f'Week {week_num}: Initial portfolio ({len(portfolio)} stocks)',
-                portfolio_value=portfolio_value
+                portfolio_value=portfolio_value,
+                is_locked=True
             )
 
             snapshots_created += 1
@@ -230,13 +231,14 @@ def populate_database_from_backtest():
                 notes += f'{len(to_buy)} buys, '
             notes += f'{len(portfolio)} holdings'
 
-            # Save snapshot
+            # Save snapshot (locked as historical backtest data)
             db.save_portfolio_snapshot(
                 take_profit=portfolio[:3] if len(portfolio) >= 3 else portfolio,
                 hold=portfolio[3:10] if len(portfolio) > 3 else [],
                 buffer=portfolio[10:] if len(portfolio) > 10 else [],
                 notes=notes,
-                portfolio_value=portfolio_value
+                portfolio_value=portfolio_value,
+                is_locked=True
             )
 
             snapshots_created += 1
