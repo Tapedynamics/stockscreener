@@ -1089,6 +1089,108 @@ def get_activity_log():
         return api_error(str(e), 500)
 
 
+@app.route('/api/portfolio/refresh-prices', methods=['GET'])
+def refresh_portfolio_prices():
+    """Get real-time prices and calculate P&L for current portfolio"""
+    try:
+        db = get_db()
+
+        # Get current portfolio
+        latest = db.get_latest_portfolio()
+        if not latest:
+            return api_error('No portfolio found', 404)
+
+        # Get all active positions (HOLD = CORE stocks we own)
+        active_tickers = latest['hold']
+
+        if not active_tickers:
+            return api_error('No active positions', 400)
+
+        # Get all BUY trades to know purchase prices and shares
+        all_trades = db.get_trades(limit=1000)
+        buy_trades = [t for t in all_trades if t['action'] == 'BUY' and t['ticker'] in active_tickers]
+
+        # Group by ticker (latest buy for each)
+        positions = {}
+        for trade in buy_trades:
+            ticker = trade['ticker']
+            if ticker not in positions:
+                positions[ticker] = {
+                    'ticker': ticker,
+                    'purchase_price': trade['price'],
+                    'shares': trade['shares'],
+                    'invested': trade['total_cost'],
+                    'purchase_date': trade['timestamp']
+                }
+
+        # Fetch current prices
+        results = []
+        total_invested = 0
+        total_current_value = 0
+
+        for ticker, pos in positions.items():
+            try:
+                # Fetch real-time price
+                stock = yf.Ticker(ticker)
+                info = stock.info
+
+                current_price = info.get('currentPrice') or info.get('regularMarketPrice')
+
+                if not current_price:
+                    # Fallback to latest close
+                    hist = stock.history(period='1d')
+                    if not hist.empty:
+                        current_price = float(hist['Close'].iloc[-1])
+
+                if current_price:
+                    current_value = pos['shares'] * current_price
+                    pnl_dollars = current_value - pos['invested']
+                    pnl_percent = (pnl_dollars / pos['invested']) * 100
+
+                    results.append({
+                        'ticker': ticker,
+                        'company_name': info.get('shortName', ticker),
+                        'shares': pos['shares'],
+                        'purchase_price': pos['purchase_price'],
+                        'current_price': current_price,
+                        'invested': pos['invested'],
+                        'current_value': current_value,
+                        'pnl_dollars': pnl_dollars,
+                        'pnl_percent': pnl_percent,
+                        'purchase_date': pos['purchase_date']
+                    })
+
+                    total_invested += pos['invested']
+                    total_current_value += current_value
+
+            except Exception as e:
+                logger.error(f"Error fetching price for {ticker}: {e}")
+                results.append({
+                    'ticker': ticker,
+                    'error': str(e)
+                })
+
+        # Calculate total P&L
+        total_pnl_dollars = total_current_value - total_invested
+        total_pnl_percent = (total_pnl_dollars / total_invested * 100) if total_invested > 0 else 0
+
+        return api_success({
+            'positions': results,
+            'summary': {
+                'total_invested': total_invested,
+                'total_current_value': total_current_value,
+                'total_pnl_dollars': total_pnl_dollars,
+                'total_pnl_percent': total_pnl_percent,
+                'position_count': len(results),
+                'updated_at': datetime.now().isoformat()
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error refreshing portfolio prices: {e}")
+        return api_error(str(e), 500)
+
+
 @app.route('/api/trades', methods=['GET'])
 def get_trades_api():
     """Get trade history (order tickets)"""
