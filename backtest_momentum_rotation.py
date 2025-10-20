@@ -141,6 +141,7 @@ class MomentumBacktest:
                     price = current_prices[ticker]
                     shares = position_size / price
                     shares_held[ticker] = shares
+                    capital -= position_size  # Reduce capital after buying
                     trades.append({
                         'date': date,
                         'action': 'BUY',
@@ -244,7 +245,7 @@ class MomentumBacktest:
 
                 # Execute buys
                 if to_buy:
-                    position_size = capital / (len(portfolio) + len(to_buy))
+                    position_size = capital / len(to_buy)
 
                     for ticker in to_buy:
                         price = current_prices[ticker]

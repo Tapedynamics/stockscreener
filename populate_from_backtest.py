@@ -113,9 +113,10 @@ def populate_database_from_backtest():
                 price = current_prices[ticker]
                 shares = position_size / price
                 shares_held[ticker] = shares
+                capital -= position_size  # Reduce capital after buying
 
             # Calculate portfolio value
-            portfolio_value = sum(shares_held[t] * current_prices[t] for t in portfolio)
+            portfolio_value = capital + sum(shares_held[t] * current_prices[t] for t in portfolio)
 
             # Save snapshot (locked as historical backtest data)
             db.save_portfolio_snapshot(
@@ -206,8 +207,8 @@ def populate_database_from_backtest():
             to_buy = top_10_tickers[:slots_to_fill]
 
             # Execute buys
-            if to_buy and len(portfolio) + len(to_buy) > 0:
-                position_size = capital / (len(portfolio) + len(to_buy))
+            if to_buy:
+                position_size = capital / len(to_buy)
 
                 for ticker in to_buy:
                     price = current_prices[ticker]
