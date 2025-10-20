@@ -1037,11 +1037,13 @@ def migrate_postgres():
     Fixes DATETIME -> TIMESTAMP conversion issue
     WARNING: This deletes ALL data!
     """
+    logger.info("[MIGRATE] Endpoint called - starting migration...")
+
     try:
         from db_adapter import adapter
-        from database import Database
         import os
 
+        logger.info(f"[MIGRATE] Database type: {adapter.db_type}")
         logger.info("[MIGRATE] Starting PostgreSQL migration...")
 
         # Create completely fresh connection bypassing Flask pool
@@ -1077,12 +1079,97 @@ def migrate_postgres():
 
         logger.info(f"[MIGRATE] Dropped {len(dropped)} tables")
 
-        # Recreate tables using init_db (will use adapter with TIMESTAMP)
-        conn.close()
-        logger.info("[MIGRATE] Creating Database instance to recreate tables...")
-        new_db = Database(skip_init=True)  # Don't call init_db in constructor
-        new_db.init_db()  # Call it manually AFTER tables are dropped
-        logger.info("[MIGRATE] All tables recreated successfully")
+        # Recreate tables manually using SQL (don't import Database to avoid corruption)
+        logger.info("[MIGRATE] Recreating tables with PostgreSQL TIMESTAMP type...")
+
+        # Create fresh connection for table creation
+        conn2 = psycopg2.connect(os.getenv('DATABASE_URL')) if adapter.db_type == 'postgresql' else adapter.get_connection('portfolio.db')
+        if adapter.db_type == 'postgresql':
+            conn2.set_session(autocommit=True)
+        cursor2 = conn2.cursor()
+
+        # Create all tables using adapter (automatically converts DATETIME → TIMESTAMP)
+        create_statements = [
+            '''CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                take_profit TEXT NOT NULL,
+                hold TEXT NOT NULL,
+                buffer TEXT NOT NULL,
+                total_stocks INTEGER,
+                portfolio_value REAL,
+                notes TEXT,
+                is_locked BOOLEAN DEFAULT 0
+            )''',
+            '''CREATE TABLE IF NOT EXISTS activity_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                action_type TEXT NOT NULL,
+                ticker TEXT,
+                description TEXT NOT NULL,
+                metadata TEXT
+            )''',
+            '''CREATE TABLE IF NOT EXISTS stock_performance (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker TEXT NOT NULL,
+                date DATE NOT NULL,
+                price REAL,
+                performance REAL,
+                UNIQUE(ticker, date)
+            )''',
+            '''CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )''',
+            '''CREATE TABLE IF NOT EXISTS sold_positions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker TEXT NOT NULL,
+                sold_date DATETIME NOT NULL,
+                sold_reason TEXT NOT NULL,
+                sold_rank INTEGER,
+                can_rebuy_after DATETIME,
+                rebought BOOLEAN DEFAULT 0,
+                rebought_date DATETIME
+            )''',
+            '''CREATE TABLE IF NOT EXISTS trades (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                ticker TEXT NOT NULL,
+                company_name TEXT,
+                action TEXT NOT NULL,
+                rank INTEGER,
+                price REAL NOT NULL,
+                shares REAL NOT NULL,
+                capital_allocated REAL NOT NULL,
+                total_cost REAL NOT NULL,
+                cash_remaining REAL,
+                status TEXT DEFAULT 'FILLED',
+                strategy_note TEXT,
+                metadata TEXT
+            )'''
+        ]
+
+        for statement in create_statements:
+            adapter.execute(cursor2, statement)
+            logger.info(f"[MIGRATE] Created table")
+
+        # Create indexes
+        indexes = [
+            'CREATE INDEX IF NOT EXISTS idx_portfolio_timestamp ON portfolio_snapshots(timestamp DESC)',
+            'CREATE INDEX IF NOT EXISTS idx_activity_timestamp ON activity_log(timestamp DESC)',
+            'CREATE INDEX IF NOT EXISTS idx_stock_ticker_date ON stock_performance(ticker, date DESC)',
+            'CREATE INDEX IF NOT EXISTS idx_activity_action_type ON activity_log(action_type, timestamp DESC)',
+            'CREATE INDEX IF NOT EXISTS idx_sold_ticker_date ON sold_positions(ticker, sold_date DESC)',
+            'CREATE INDEX IF NOT EXISTS idx_trades_timestamp ON trades(timestamp DESC)',
+            'CREATE INDEX IF NOT EXISTS idx_trades_ticker ON trades(ticker, timestamp DESC)'
+        ]
+
+        for index in indexes:
+            adapter.execute(cursor2, index)
+
+        conn2.close()
+        logger.info("[MIGRATE] All tables and indexes created successfully")
 
         return api_success({
             'message': 'PostgreSQL migration complete',
