@@ -1039,9 +1039,19 @@ def migrate_postgres():
     """
     try:
         from db_adapter import adapter
+        from database import Database
 
-        db = get_db()
-        conn = db.get_connection()
+        # Create fresh connection bypassing Database.__init__ (which calls init_db())
+        logger.info("[MIGRATE] Creating fresh database connection...")
+        conn = adapter.get_connection('portfolio.db')
+
+        # Reset any aborted transaction first
+        if adapter.db_type == 'postgresql':
+            try:
+                conn.rollback()
+                logger.info("[MIGRATE] Rolled back any aborted transaction")
+            except Exception as e:
+                logger.warning(f"[MIGRATE] Rollback failed (might be ok): {e}")
 
         # Enable autocommit for PostgreSQL DDL operations
         if adapter.db_type == 'postgresql':
@@ -1071,7 +1081,8 @@ def migrate_postgres():
 
         # Recreate tables using init_db (will use adapter with TIMESTAMP)
         conn.close()
-        db.init_db()
+        logger.info("[MIGRATE] Creating Database instance to recreate tables...")
+        new_db = Database()
         logger.info("[MIGRATE] All tables recreated successfully")
 
         return api_success({
