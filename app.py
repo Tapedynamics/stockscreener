@@ -929,7 +929,7 @@ def get_portfolio_chart():
                 'snapshots_count': 0
             })
 
-        logger.info(f"Building chart with {len(history)} historical snapshots")
+        logger.info(f"Building chart with {len(history)} historical snapshots for timeframe: {timeframe}")
 
         # Build chart data from real history
         labels = []
@@ -937,6 +937,51 @@ def get_portfolio_chart():
 
         # Reverse to get chronological order (oldest first)
         history_sorted = sorted(history, key=lambda x: x['timestamp'])
+
+        # Filter by timeframe
+        from datetime import datetime as dt, timedelta
+        now = dt.now()
+
+        if timeframe == '1M':
+            cutoff_date = now - timedelta(days=30)
+        elif timeframe == '3M':
+            cutoff_date = now - timedelta(days=90)
+        elif timeframe == '6M':
+            cutoff_date = now - timedelta(days=180)
+        elif timeframe == 'YTD':
+            # Year to date - start of 2025
+            cutoff_date = dt(2025, 1, 1)
+        elif timeframe == '1Y':
+            cutoff_date = now - timedelta(days=365)
+        else:  # ALL
+            cutoff_date = None
+
+        # Filter history if cutoff date is set
+        if cutoff_date:
+            filtered_history = []
+            for snapshot in history_sorted:
+                timestamp = snapshot['timestamp']
+                if 'T' not in timestamp:
+                    date_obj = dt.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
+                else:
+                    date_obj = dt.fromisoformat(timestamp.replace('Z', '+00:00'))
+
+                if date_obj >= cutoff_date:
+                    filtered_history.append(snapshot)
+
+            history_sorted = filtered_history
+            logger.info(f"Filtered to {len(history_sorted)} snapshots after {cutoff_date.strftime('%Y-%m-%d')}")
+
+        if len(history_sorted) == 0:
+            # No data in this timeframe
+            return api_success({
+                'chart_data': {
+                    'labels': [],
+                    'datasets': []
+                },
+                'timeframe': timeframe,
+                'snapshots_count': 0
+            })
 
         portfolio_values = []
         for snapshot in history_sorted:
