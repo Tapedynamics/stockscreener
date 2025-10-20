@@ -27,6 +27,14 @@ class Database:
                 self.init_db()
             except Exception as e:
                 logger.error(f"Failed to initialize database (migration might be needed): {e}")
+                # Rollback the failed transaction to avoid "transaction aborted" errors
+                try:
+                    conn = self.get_connection()
+                    conn.rollback()
+                    conn.close()
+                    logger.info("Rolled back failed init_db transaction")
+                except:
+                    pass
                 # Don't raise - allow app to start even if init fails
                 # Migration endpoint will fix the schema
 
