@@ -667,24 +667,24 @@
         <!-- Stats Grid -->
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-label">Portfolio Value</div>
-                <div class="stat-value">$150,000</div>
-                <div class="stat-change positive">+12.5% All Time</div>
+                <div class="stat-label">Positions Market Value</div>
+                <div class="stat-value" id="positionsValue">$125,000</div>
+                <div class="stat-change neutral" id="activeStocksCount">10 Active Stocks</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Total Positions</div>
-                <div class="stat-value" id="totalPositions">15</div>
-                <div class="stat-change neutral">Active Stocks</div>
+                <div class="stat-label">Cash Available</div>
+                <div class="stat-value" id="cashAvailable">$25,000</div>
+                <div class="stat-change neutral">Reserved for Rotation</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Weekly Performance</div>
-                <div class="stat-value">+3.2%</div>
-                <div class="stat-change positive">+$4,800</div>
+                <div class="stat-label">Total Portfolio</div>
+                <div class="stat-value" id="totalPortfolio">$150,000</div>
+                <div class="stat-change neutral" id="totalChange">Positions + Cash</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Next Rebalance</div>
-                <div class="stat-value" id="nextRebalanceDay">Monday</div>
-                <div class="stat-change neutral" id="nextRebalanceTime">19:00 CET</div>
+                <div class="stat-label">P&L (Unrealized)</div>
+                <div class="stat-value" id="unrealizedPnL">$0</div>
+                <div class="stat-change neutral" id="pnlPercent">0.00%</div>
             </div>
         </div>
 
@@ -890,15 +890,11 @@
             const takeProfitList = document.getElementById('takeProfitList');
             const holdList = document.getElementById('holdList');
             const bufferList = document.getElementById('bufferList');
-            const totalPositions = document.getElementById('totalPositions');
 
             // Clear previous results
             takeProfitList.innerHTML = '';
             holdList.innerHTML = '';
             bufferList.innerHTML = '';
-
-            // Update total positions
-            totalPositions.textContent = basket.total_found || 0;
 
             // Take Profit - with safety check
             if (Array.isArray(basket.take_profit)) {
@@ -974,37 +970,41 @@
         function updateStatsDisplay(stats) {
             console.log('Updating stats display:', stats);
 
-            // Update portfolio value and all-time return
-            const valueElem = document.querySelector('.stat-card:nth-child(1) .stat-value');
-            const allTimeElem = document.querySelector('.stat-card:nth-child(1) .stat-change');
-            if (valueElem) {
-                valueElem.textContent = `$${Math.round(stats.total_value).toLocaleString()}`;
-            }
-            if (allTimeElem && stats.all_time_return !== undefined) {
-                const returnClass = stats.all_time_return > 0 ? 'positive' : stats.all_time_return < 0 ? 'negative' : 'neutral';
-                const returnSign = stats.all_time_return > 0 ? '+' : '';
-                allTimeElem.textContent = `${returnSign}${stats.all_time_return.toFixed(2)}% All Time`;
-                allTimeElem.className = `stat-change ${returnClass}`;
-            }
+            const initialCapital = 150000;
+            const targetStocks = 12;
+            const capitalPerStock = initialCapital / targetStocks; // $12,500
 
-            // Update total positions
-            const positionsElem = document.getElementById('totalPositions');
-            if (positionsElem) {
-                positionsElem.textContent = stats.total_positions || 0;
-            }
+            // Calculate values
+            const positionsMarketValue = Math.round(stats.total_value || 0);
+            const activeStocks = stats.total_positions || 0;
+            const deployedCapital = activeStocks * capitalPerStock;
+            const cashAvailable = initialCapital - deployedCapital;
+            const totalPortfolio = positionsMarketValue + cashAvailable;
+            const unrealizedPnL = positionsMarketValue - deployedCapital;
+            const pnlPercent = deployedCapital > 0 ? (unrealizedPnL / deployedCapital) * 100 : 0;
 
-            // Update weekly performance
-            const perfElem = document.querySelector('.stat-card:nth-child(3) .stat-value');
-            const gainElem = document.querySelector('.stat-card:nth-child(3) .stat-change');
-            if (perfElem && gainElem) {
-                const perfClass = stats.weekly_performance > 0 ? 'positive' : stats.weekly_performance < 0 ? 'negative' : 'neutral';
-                const perfSign = stats.weekly_performance > 0 ? '+' : '';
-                const gainSign = stats.weekly_gain > 0 ? '+' : '';
+            // Update Positions Market Value
+            document.getElementById('positionsValue').textContent = `$${positionsMarketValue.toLocaleString()}`;
+            document.getElementById('activeStocksCount').textContent = `${activeStocks} Active Stocks`;
 
-                perfElem.textContent = `${perfSign}${stats.weekly_performance}%`;
-                gainElem.textContent = `${gainSign}$${Math.abs(stats.weekly_gain).toLocaleString()}`;
-                gainElem.className = `stat-change ${perfClass}`;
-            }
+            // Update Cash Available
+            document.getElementById('cashAvailable').textContent = `$${cashAvailable.toLocaleString()}`;
+
+            // Update Total Portfolio
+            document.getElementById('totalPortfolio').textContent = `$${totalPortfolio.toLocaleString()}`;
+
+            // Update P&L
+            const pnlElem = document.getElementById('unrealizedPnL');
+            const pnlPercentElem = document.getElementById('pnlPercent');
+            const pnlSign = unrealizedPnL >= 0 ? '+' : '';
+            const pnlClass = unrealizedPnL > 0 ? 'positive' : unrealizedPnL < 0 ? 'negative' : 'neutral';
+
+            pnlElem.textContent = `${pnlSign}$${Math.abs(unrealizedPnL).toLocaleString()}`;
+            pnlElem.className = `stat-value`;
+            pnlElem.style.color = unrealizedPnL > 0 ? '#10b981' : unrealizedPnL < 0 ? '#ef4444' : '#fff';
+
+            pnlPercentElem.textContent = `${pnlSign}${Math.abs(pnlPercent).toFixed(2)}%`;
+            pnlPercentElem.className = `stat-change ${pnlClass}`;
         }
 
         function showError(message) {
