@@ -1040,23 +1040,21 @@ def migrate_postgres():
     try:
         from db_adapter import adapter
         from database import Database
+        import os
 
-        # Create fresh connection bypassing Database.__init__ (which calls init_db())
-        logger.info("[MIGRATE] Creating fresh database connection...")
-        conn = adapter.get_connection('portfolio.db')
+        logger.info("[MIGRATE] Starting PostgreSQL migration...")
 
-        # Reset any aborted transaction first
+        # Create completely fresh connection bypassing Flask pool
         if adapter.db_type == 'postgresql':
-            try:
-                conn.rollback()
-                logger.info("[MIGRATE] Rolled back any aborted transaction")
-            except Exception as e:
-                logger.warning(f"[MIGRATE] Rollback failed (might be ok): {e}")
-
-        # Enable autocommit for PostgreSQL DDL operations
-        if adapter.db_type == 'postgresql':
+            import psycopg2
+            database_url = os.getenv('DATABASE_URL')
+            logger.info("[MIGRATE] Creating fresh PostgreSQL connection...")
+            conn = psycopg2.connect(database_url)
             conn.set_session(autocommit=True)
-            logger.info("[MIGRATE] PostgreSQL autocommit enabled")
+            logger.info("[MIGRATE] Fresh connection created with autocommit")
+        else:
+            # SQLite - use adapter
+            conn = adapter.get_connection('portfolio.db')
 
         cursor = conn.cursor()
 
