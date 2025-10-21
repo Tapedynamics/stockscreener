@@ -1988,6 +1988,94 @@ def init_database_endpoint():
         return api_error(f"Database initialization failed: {str(e)}", 500)
 
 
+@app.route('/api/admin/clean-database', methods=['POST'])
+def clean_database_endpoint():
+    """
+    Clean all data from database tables - START FRESH
+    WARNING: This will delete all data!
+    """
+    try:
+        logger.info("Cleaning database - deleting all data...")
+
+        conn = adapter.get_connection()
+        cursor = conn.cursor()
+
+        tables_cleaned = []
+
+        # Clean all tables in reverse order of dependencies
+        try:
+            adapter.execute(cursor, 'DELETE FROM trades')
+            tables_cleaned.append('trades')
+            logger.info("✅ Cleaned trades table")
+        except Exception as e:
+            logger.error(f"Error cleaning trades: {e}")
+
+        try:
+            adapter.execute(cursor, 'DELETE FROM sold_positions')
+            tables_cleaned.append('sold_positions')
+            logger.info("✅ Cleaned sold_positions table")
+        except Exception as e:
+            logger.error(f"Error cleaning sold_positions: {e}")
+
+        try:
+            adapter.execute(cursor, 'DELETE FROM stock_performance')
+            tables_cleaned.append('stock_performance')
+            logger.info("✅ Cleaned stock_performance table")
+        except Exception as e:
+            logger.error(f"Error cleaning stock_performance: {e}")
+
+        try:
+            adapter.execute(cursor, 'DELETE FROM activity_log')
+            tables_cleaned.append('activity_log')
+            logger.info("✅ Cleaned activity_log table")
+        except Exception as e:
+            logger.error(f"Error cleaning activity_log: {e}")
+
+        try:
+            adapter.execute(cursor, 'DELETE FROM portfolio_snapshots')
+            tables_cleaned.append('portfolio_snapshots')
+            logger.info("✅ Cleaned portfolio_snapshots table")
+        except Exception as e:
+            logger.error(f"Error cleaning portfolio_snapshots: {e}")
+
+        # Don't clean settings table - keep configuration
+        # try:
+        #     adapter.execute(cursor, 'DELETE FROM settings')
+        #     tables_cleaned.append('settings')
+        #     logger.info("✅ Cleaned settings table")
+        # except Exception as e:
+        #     logger.error(f"Error cleaning settings: {e}")
+
+        conn.commit()
+
+        # Reset sequences for PostgreSQL
+        if adapter.db_type == 'postgresql':
+            try:
+                cursor.execute("ALTER SEQUENCE portfolio_snapshots_id_seq RESTART WITH 1")
+                cursor.execute("ALTER SEQUENCE activity_log_id_seq RESTART WITH 1")
+                cursor.execute("ALTER SEQUENCE stock_performance_id_seq RESTART WITH 1")
+                cursor.execute("ALTER SEQUENCE trades_id_seq RESTART WITH 1")
+                cursor.execute("ALTER SEQUENCE sold_positions_id_seq RESTART WITH 1")
+                conn.commit()
+                logger.info("✅ Reset all ID sequences")
+            except Exception as e:
+                logger.warning(f"Could not reset sequences: {e}")
+
+        conn.close()
+
+        logger.info(f"Database cleaned - {len(tables_cleaned)} tables cleared")
+
+        return api_success({
+            'message': 'Database cleaned successfully - ready for fresh start',
+            'tables_cleaned': tables_cleaned,
+            'sequences_reset': adapter.db_type == 'postgresql'
+        })
+
+    except Exception as e:
+        logger.error(f"Error cleaning database: {e}", exc_info=True)
+        return api_error(f"Database cleaning failed: {str(e)}", 500)
+
+
 if __name__ == '__main__':
     logger.info("="*50)
     logger.info("AI Portfolio Manager - Development Mode")
