@@ -6,6 +6,7 @@ Price tracking module using Yahoo Finance
 import yfinance as yf
 from datetime import datetime, timedelta
 from database import get_db
+from db_adapter import adapter
 import logging
 from typing import Dict, List, Optional, Tuple
 
@@ -119,13 +120,13 @@ class PriceTracker:
         end_date = datetime.now().date()
         start_date = end_date - timedelta(days=days)
 
-        cursor.execute('''
+        adapter.execute(cursor, '''
             SELECT price, date FROM stock_performance
             WHERE ticker = ? AND date >= ? AND date <= ?
             ORDER BY date ASC
         ''', (ticker, start_date, end_date))
 
-        rows = cursor.fetchall()
+        rows = adapter.fetchall_dict(cursor)
         conn.close()
 
         if len(rows) >= 2:
