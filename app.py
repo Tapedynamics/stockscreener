@@ -288,11 +288,11 @@ def calculate_real_portfolio_value(db) -> float:
                 total_value += purchase_cost
 
         logger.info(f"Portfolio value calculated: ${total_value:,.2f} ({successful_tickers}/{len(holdings)} positions)")
-        return total_value
+        return float(total_value)  # Convert numpy float to Python float for PostgreSQL
 
     except Exception as e:
         logger.error(f"Error calculating portfolio value: {e}")
-        return 0
+        return 0.0
 
 
 def format_trade_ticket(trade: Dict) -> str:
