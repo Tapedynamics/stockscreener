@@ -60,6 +60,9 @@ class DatabaseAdapter:
         # Replace DATETIME with TIMESTAMP (PostgreSQL doesn't have DATETIME)
         converted = converted.replace('DATETIME', 'TIMESTAMP')
 
+        # Replace BOOLEAN DEFAULT 0 with BOOLEAN DEFAULT FALSE (PostgreSQL requirement)
+        converted = converted.replace('BOOLEAN DEFAULT 0', 'BOOLEAN DEFAULT FALSE')
+
         # Replace ? placeholders with %s
         converted = converted.replace('?', '%s')
 
