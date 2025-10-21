@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Dict, Any, Tuple, List
 import yfinance as yf
 from database import get_db
+from db_adapter import adapter
 from scheduler import create_scheduler
 from price_tracker import get_price_tracker
 from portfolio_simulator import get_simulator
