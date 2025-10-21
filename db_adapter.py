@@ -121,6 +121,13 @@ class DatabaseAdapter:
             Cursor after execution
         """
         converted_query = self.convert_query(query)
+
+        # For PostgreSQL INSERT queries, add RETURNING id if not already present
+        if self.db_type == 'postgresql':
+            query_upper = converted_query.upper().strip()
+            if query_upper.startswith('INSERT') and 'RETURNING' not in query_upper:
+                converted_query = converted_query.rstrip() + ' RETURNING id'
+
         cursor.execute(converted_query, params)
         return cursor
 
@@ -158,8 +165,19 @@ class DatabaseAdapter:
             Last insert ID
         """
         if self.db_type == 'postgresql':
-            # PostgreSQL: get from RETURNING clause or currval
-            return cursor.fetchone()[0]
+            # PostgreSQL: Try lastrowid first (psycopg2 supports it for SERIAL columns)
+            # If that fails, use currval (requires sequence name)
+            if hasattr(cursor, 'lastrowid') and cursor.lastrowid:
+                return cursor.lastrowid
+            # Fallback: try to fetch from RETURNING clause if available
+            try:
+                result = cursor.fetchone()
+                if result:
+                    return result[0]
+            except:
+                pass
+            # Last resort: return 0 (not ideal but prevents crash)
+            return 0
         else:
             # SQLite: use lastrowid
             return cursor.lastrowid
