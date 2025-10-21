@@ -1099,7 +1099,7 @@ def migrate_postgres():
                 total_stocks INTEGER,
                 portfolio_value REAL,
                 notes TEXT,
-                is_locked BOOLEAN DEFAULT 0
+                is_locked BOOLEAN DEFAULT FALSE
             )''',
             '''CREATE TABLE IF NOT EXISTS activity_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1129,7 +1129,7 @@ def migrate_postgres():
                 sold_reason TEXT NOT NULL,
                 sold_rank INTEGER,
                 can_rebuy_after DATETIME,
-                rebought BOOLEAN DEFAULT 0,
+                rebought BOOLEAN DEFAULT FALSE,
                 rebought_date DATETIME
             )''',
             '''CREATE TABLE IF NOT EXISTS trades (

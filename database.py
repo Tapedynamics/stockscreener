@@ -74,7 +74,7 @@ class Database:
 
         # Add is_locked column if it doesn't exist (migration)
         try:
-            adapter.execute(cursor, 'ALTER TABLE portfolio_snapshots ADD COLUMN is_locked BOOLEAN DEFAULT 0')
+            adapter.execute(cursor, 'ALTER TABLE portfolio_snapshots ADD COLUMN is_locked BOOLEAN DEFAULT FALSE')
             logger.info("Added is_locked column to portfolio_snapshots")
         except Exception:
             pass  # Column already exists
@@ -121,7 +121,7 @@ class Database:
                 sold_reason TEXT NOT NULL,
                 sold_rank INTEGER,
                 can_rebuy_after DATETIME,
-                rebought BOOLEAN DEFAULT 0,
+                rebought BOOLEAN DEFAULT FALSE,
                 rebought_date DATETIME
             )
         ''')
