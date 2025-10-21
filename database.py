@@ -198,6 +198,10 @@ class Database:
             is_locked: If True, snapshot cannot be modified/deleted (for historical data)
             timestamp: Optional timestamp (datetime object or ISO string). If None, uses current time
         """
+        # Convert numpy types to Python types (pandas/yfinance return numpy)
+        if portfolio_value is not None and hasattr(portfolio_value, 'item'):
+            portfolio_value = float(portfolio_value)
+
         conn = self.get_connection()
         cursor = conn.cursor()
 
