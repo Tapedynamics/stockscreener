@@ -1830,6 +1830,163 @@ def get_momentum_rankings():
         return api_error(str(e), 500)
 
 
+@app.route('/api/admin/init-database', methods=['POST'])
+def init_database_endpoint():
+    """
+    Initialize database tables - FOR POSTGRESQL ONLY
+    Creates all required tables if they don't exist
+    """
+    try:
+        # Check if we're using PostgreSQL
+        if adapter.db_type != 'postgresql':
+            return api_error("This endpoint is for PostgreSQL only", 400)
+
+        logger.info("Initializing PostgreSQL database tables...")
+
+        conn = adapter.get_connection()
+        cursor = conn.cursor()
+
+        tables_created = []
+
+        # Portfolio snapshots table
+        try:
+            adapter.execute(cursor, '''
+                CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+                    id SERIAL PRIMARY KEY,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    take_profit TEXT NOT NULL,
+                    hold TEXT NOT NULL,
+                    buffer TEXT NOT NULL,
+                    total_stocks INTEGER,
+                    portfolio_value REAL,
+                    notes TEXT,
+                    is_locked BOOLEAN DEFAULT FALSE
+                )
+            ''')
+            tables_created.append('portfolio_snapshots')
+            logger.info("✅ portfolio_snapshots table created/verified")
+        except Exception as e:
+            logger.error(f"Error creating portfolio_snapshots: {e}")
+
+        # Activity log table
+        try:
+            adapter.execute(cursor, '''
+                CREATE TABLE IF NOT EXISTS activity_log (
+                    id SERIAL PRIMARY KEY,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    action_type TEXT NOT NULL,
+                    ticker TEXT,
+                    description TEXT NOT NULL,
+                    metadata TEXT
+                )
+            ''')
+            tables_created.append('activity_log')
+            logger.info("✅ activity_log table created/verified")
+        except Exception as e:
+            logger.error(f"Error creating activity_log: {e}")
+
+        # Stock performance table
+        try:
+            adapter.execute(cursor, '''
+                CREATE TABLE IF NOT EXISTS stock_performance (
+                    id SERIAL PRIMARY KEY,
+                    ticker TEXT NOT NULL,
+                    date DATE NOT NULL,
+                    price REAL,
+                    volume BIGINT,
+                    UNIQUE(ticker, date)
+                )
+            ''')
+            tables_created.append('stock_performance')
+            logger.info("✅ stock_performance table created/verified")
+        except Exception as e:
+            logger.error(f"Error creating stock_performance: {e}")
+
+        # Trades table
+        try:
+            adapter.execute(cursor, '''
+                CREATE TABLE IF NOT EXISTS trades (
+                    id SERIAL PRIMARY KEY,
+                    snapshot_id INTEGER NOT NULL,
+                    ticker TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    buy_price REAL,
+                    sell_price REAL,
+                    quantity INTEGER,
+                    trade_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    notes TEXT,
+                    FOREIGN KEY (snapshot_id) REFERENCES portfolio_snapshots(id)
+                )
+            ''')
+            tables_created.append('trades')
+            logger.info("✅ trades table created/verified")
+        except Exception as e:
+            logger.error(f"Error creating trades: {e}")
+
+        # Sold positions table
+        try:
+            adapter.execute(cursor, '''
+                CREATE TABLE IF NOT EXISTS sold_positions (
+                    id SERIAL PRIMARY KEY,
+                    ticker TEXT NOT NULL,
+                    buy_price REAL,
+                    sell_price REAL,
+                    sell_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    hold_days INTEGER,
+                    profit_loss REAL,
+                    profit_loss_pct REAL,
+                    snapshot_id INTEGER,
+                    rebought BOOLEAN DEFAULT FALSE,
+                    FOREIGN KEY (snapshot_id) REFERENCES portfolio_snapshots(id)
+                )
+            ''')
+            tables_created.append('sold_positions')
+            logger.info("✅ sold_positions table created/verified")
+        except Exception as e:
+            logger.error(f"Error creating sold_positions: {e}")
+
+        # Settings table
+        try:
+            adapter.execute(cursor, '''
+                CREATE TABLE IF NOT EXISTS settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            tables_created.append('settings')
+            logger.info("✅ settings table created/verified")
+        except Exception as e:
+            logger.error(f"Error creating settings: {e}")
+
+        conn.commit()
+
+        # Verify tables
+        cursor.execute("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+            ORDER BY table_name
+        """)
+
+        existing_tables = [row[0] for row in cursor.fetchall()]
+
+        conn.close()
+
+        logger.info(f"Database initialized - {len(tables_created)} tables created/verified")
+
+        return api_success({
+            'message': 'Database tables initialized successfully',
+            'tables_created': tables_created,
+            'existing_tables': existing_tables,
+            'database_type': adapter.db_type
+        })
+
+    except Exception as e:
+        logger.error(f"Error initializing database: {e}", exc_info=True)
+        return api_error(f"Database initialization failed: {str(e)}", 500)
+
+
 if __name__ == '__main__':
     logger.info("="*50)
     logger.info("AI Portfolio Manager - Development Mode")
