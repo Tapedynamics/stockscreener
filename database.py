@@ -222,7 +222,7 @@ class Database:
                 len(take_profit) + len(hold) + len(buffer),
                 portfolio_value,
                 notes,
-                1 if is_locked else 0
+                is_locked
             ))
         else:
             # Use default CURRENT_TIMESTAMP
@@ -237,7 +237,7 @@ class Database:
                 len(take_profit) + len(hold) + len(buffer),
                 portfolio_value,
                 notes,
-                1 if is_locked else 0
+                is_locked
             ))
 
         snapshot_id = adapter.get_last_insert_id(cursor)
@@ -539,7 +539,7 @@ class Database:
         adapter.execute(cursor, '''
             SELECT sold_date, sold_reason, sold_rank, can_rebuy_after
             FROM sold_positions
-            WHERE ticker = ? AND rebought = 0
+            WHERE ticker = ? AND rebought = FALSE
             ORDER BY sold_date DESC
             LIMIT 1
         ''', (ticker,))
@@ -582,8 +582,8 @@ class Database:
 
         adapter.execute(cursor, '''
             UPDATE sold_positions
-            SET rebought = 1, rebought_date = ?
-            WHERE ticker = ? AND rebought = 0
+            SET rebought = TRUE, rebought_date = ?
+            WHERE ticker = ? AND rebought = FALSE
         ''', (datetime.now().isoformat(), ticker))
 
         conn.commit()
@@ -605,7 +605,7 @@ class Database:
         adapter.execute(cursor, '''
             SELECT ticker, sold_date, sold_reason, sold_rank, can_rebuy_after
             FROM sold_positions
-            WHERE rebought = 0
+            WHERE rebought = FALSE
             ORDER BY sold_date DESC
         ''')
 
@@ -648,14 +648,14 @@ class Database:
         if before_date:
             adapter.execute(cursor, '''
                 UPDATE portfolio_snapshots
-                SET is_locked = 1
-                WHERE timestamp < ? AND (is_locked = 0 OR is_locked IS NULL)
+                SET is_locked = TRUE
+                WHERE timestamp < ? AND (is_locked = FALSE OR is_locked IS NULL)
             ''', (before_date,))
         else:
             adapter.execute(cursor, '''
                 UPDATE portfolio_snapshots
-                SET is_locked = 1
-                WHERE (is_locked = 0 OR is_locked IS NULL)
+                SET is_locked = TRUE
+                WHERE (is_locked = FALSE OR is_locked IS NULL)
             ''')
 
         locked_count = cursor.rowcount
